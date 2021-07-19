@@ -1,6 +1,11 @@
 import polyscope as ps
+from pywavefront import Wavefront
+from tkinter import Tk     # from tkinter import Tk for Python 3.x
+from tkinter.filedialog import askopenfilename
+
 import numpy as np
 from FlipEdgeNetwork import FlipEdgeNetwork
+
 
 def init_polyscope():
     # enable auto centering and scaling
@@ -9,7 +14,7 @@ def init_polyscope():
 
     # Camera ctrls
     ps.set_navigation_style("free")
-    ps.set_up_dir("z_up")
+    # ps.set_up_dir("z_up")
 
     # initialize
     ps.set_program_name("Flip Geodesics Implementation for 236329 GDP")
@@ -20,14 +25,49 @@ def init_polyscope():
 
     return ps
 
-from tkinter import Tk     # from tkinter import Tk for Python 3.x
-from tkinter.filedialog import askopenfilename
+############ opening files
+
+def read_off(mesh_url):
+    file = open(mesh_url, 'r')
+
+    if 'OFF' != file.readline().strip():
+        raise('Not a valid OFF header')
+    n_verts, n_faces, _ = tuple([int(s) for s in file.readline().strip().split(' ')])
+    verts = [[float(s) for s in file.readline().strip().split(' ')] for i_vert in range(n_verts)]
+    faces = [[int(s) for s in file.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
+
+    file.close()
+    return verts, faces
+
+def read_obj(mesh_url):
+    mesh = Wavefront(mesh_url, collect_faces=True)
+    return mesh.vertices, mesh.mesh_list[0].faces
+
 def open_mesh_file():
-    Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-    mesh_url = askopenfilename() # show an "Open" dialog box and return the path to the selected file
+    # we don't want a full GUI, so keep the root window from appearing
+    Tk().withdraw()
+
+    # show an "Open" dialog box and return the path to the selected file
+    mesh_url = askopenfilename(
+        title='Choose a mesh file to load',
+        filetypes=[
+            ('Meshes (*.obj, *.off)', ('*.obj', '*.off')),
+            ('All Files (*.*)', '*'),
+        ]
+    )
+
     if mesh_url == '':
-        exit("No file chosen")
-    return open(mesh_url, "r")
+        exit("flip_geodesic load error: No file chosen")
+
+    V, F = None, None
+    if mesh_url.endswith("obj"):
+        V, F = read_obj(mesh_url)
+    elif mesh_url.endswith("off"):
+        V, F = read_off(mesh_url)
+    else:
+        exit("flip_geodesic load error: Unrecognized format")
+
+    return np.array(V), np.array(F)
 
 def get_example_shape():
     V = np.array([ [0, 5., 0], [0, 1, -3.], [-4., 0, 0], [0, 1, 3.], [4., 0, 0] ])
@@ -35,10 +75,9 @@ def get_example_shape():
     return V, F
 
 
-# mesh_file = open_mesh_file()
-# V,F = parse_mesh_file(mesh_file)
+# V, F = get_example_shape()
+V, F = open_mesh_file()
 
-V, F = get_example_shape()
 net = FlipEdgeNetwork(V, F)
 net.set_path([0,1,2])
 pathV, pathE = net.get_path_polyline()
