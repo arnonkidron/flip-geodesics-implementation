@@ -412,3 +412,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# specific for polyscope
+imgui.ini
+.polyscope.ini
