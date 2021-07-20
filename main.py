@@ -5,6 +5,9 @@ from tkinter.filedialog import askopenfilename
 
 import numpy as np
 from FlipEdgeNetwork import FlipEdgeNetwork
+from Triangulation import Triangulation
+from edge import Edge
+from Solver import Solver
 
 
 def init_polyscope():
@@ -75,8 +78,21 @@ def get_example_shape():
     return V, F
 
 
-# V, F = get_example_shape()
-V, F = open_mesh_file()
+V, F = get_example_shape()
+# V, F = open_mesh_file()
+
+tri = Triangulation(V,F)
+triV, triE = tri.get_polyline()
+tri.demo_flip()
+triV2, triE2 = tri.get_polyline()
+
+ps = init_polyscope()
+ps_mesh = ps.register_surface_mesh("Mesh", V, F)
+ps_path = ps.register_curve_network("Before", triV, triE)
+ps_path = ps.register_curve_network("After", triV2, triE2)
+
+ps.show()
+exit()
 
 net = FlipEdgeNetwork(V, F)
 net.set_path([0,1,2])

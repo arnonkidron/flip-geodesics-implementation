@@ -1,6 +1,7 @@
 import numpy as np
 
 
+
 class FlipEdgeNetwork:
     def __init__(self, V, F):
         """
@@ -14,7 +15,8 @@ class FlipEdgeNetwork:
         """
         self.V = V
         self.path = None
-        self.tri = F
+        self.tri = Triangulation()
+        # self.tri = F
         # self.intrinsic_edges = self.get_edges(F)
 
     @staticmethod
