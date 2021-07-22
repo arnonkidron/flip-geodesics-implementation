@@ -133,9 +133,9 @@ class HalfEdge(BaseHalfEdge):
         self_len = self.get_length()
         next_len = next.get_length()
 
-        prev.angle = get_angle(self_len, next_len, prev_len)
-        self.angle = get_angle(next_len, prev_len, self_len)
-        next.angle = get_angle(prev_len, self_len, next_len)
+        prev.angle = get_angle(next_len, prev_len, self_len)
+        self.angle = get_angle(prev_len, self_len, next_len)
+        next.angle = get_angle(self_len, next_len, prev_len)
 
     def print(self, name=""):
         print(name, " ", self.get_origin(), "->", self.get_dst())

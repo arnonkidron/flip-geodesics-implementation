@@ -1,7 +1,7 @@
 from edge import *
 import numpy as np
 from copy import deepcopy
-from utils import *
+from utils import turn, is_reflex
 
 
 class BaseTriangulation:
@@ -24,9 +24,7 @@ class BaseTriangulation:
     def remove_edge(self, u, v):
         e = self.get_edge(u, v)
         self.in_edges[v].remove(e)
-
-        e = self.get_edge(v, u)
-        self.in_edges[u].remove(e)
+        self.in_edges[u].remove(e.twin)
 
 
 class Triangulation(BaseTriangulation):
@@ -87,7 +85,7 @@ class Triangulation(BaseTriangulation):
     #     angle = np.arccos(dot_product)
     #     return angle
 
-    def construct_triangle_for_flip(self, twin, prev, next):
+    def construct_triangle_for_flip(self, twin, prev, next, angle):
         f_left = prev.twin.mesh_face_right
         f_right = prev.next.mesh_face_left
 
@@ -98,12 +96,40 @@ class Triangulation(BaseTriangulation):
         prev.set_next(curr)
         curr.set_next(next)
         next.set_next(prev)
-        curr.calc_angles()
+
+        prev.angle = angle
+        curr.length = get_side_length(next.length, prev.length, prev.angle)
+        curr.angle = get_angle(prev.length, curr.length, next.length)
+        next.angle = get_angle(curr.length, next.length, prev.length)
 
         curr.vec = turn(prev.twin.vec, curr.angle, towards=dir)
 
         self.add_edge(curr)
         return curr
+
+    def flip(self, origin, dst):
+        old_edge = self.get_edge(origin, dst)
+
+        triangle_1_prev = old_edge.next
+        triangle_1_next = old_edge.twin.next.next
+        triangle_1_angle = old_edge.twin.angle + triangle_1_prev.angle
+
+        triangle_2_prev = old_edge.twin.next
+        triangle_2_next = old_edge.next.next
+        triangle_2_angle = old_edge.angle + triangle_2_prev.angle
+
+        if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
+            return None
+
+        self.remove_edge(origin, dst)
+
+        e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
+        self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
+
+        e.midpoints = []
+        e.init_midpoints(self.mesh)
+
+        return e
 
     def demo_flip(self):
         old = (0, 2)

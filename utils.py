@@ -1,4 +1,4 @@
-from math import acos, cos, sin, sqrt
+from math import acos, cos, sin, sqrt, pi
 import numpy as np
 
 
@@ -21,6 +21,10 @@ def get_side_length(a, b, angle):
 
     """
     return sqrt(a * a + b * b - 2 * a * b * cos(angle))
+
+
+def is_reflex(angle):
+    return angle >= pi - 1e-09
 
 
 #################################

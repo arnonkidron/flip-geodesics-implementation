@@ -84,27 +84,30 @@ V, F = get_example_shape()
 
 tri = Triangulation(V, F)
 triV, triE = tri.get_polyline()
-tri.demo_flip()
+tri.flip(0, 2).print("Flipped")
 triV2, triE2 = tri.get_polyline()
+tri.flip(1, 0).print("Flipped")
+triV3, triE3 = tri.get_polyline()
 
 init_polyscope()
 ps.register_surface_mesh("Mesh", V, F)
 ps.register_curve_network("Before", triV, triE)
 ps.register_curve_network("After", triV2, triE2)
+ps.register_curve_network("More", triV3, triE3)
 # ps.register_point_cloud("Midpoint", np.array([triV2[5]]))
 
-a,b,c = triV2[3]
+a,b,c = triV2[4]
 
 my_V = np.array([
     [a,b,c],
-    [a+0,b+4,c-3],
-    [a+0,b+4,c-3],
-    [a-4,b-1,c-3],
+    [a-4,b+1,c-3],
+    [a-3.8573,b-1.634,c-4.84234],
+    [a-4,b+5,c],
 ])
 
 # ps.register_curve_network("dir", my_V, np.array([[0, 1]]))
 # ps.register_curve_network("vec", my_V, np.array([[0, 2]]))
-# ps.register_curve_network("nearby", my_V, np.array([[0, 3]]))
+# ps.register_curve_network("prev.twin.vec", my_V, np.array([[0, 3]]))
 # ps.register_point_cloud("0", np.array([triV2[0]]))
 # ps.register_point_cloud("3", np.array([triV2[3]]))
 
