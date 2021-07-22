@@ -83,17 +83,29 @@ V, F = get_example_shape()
 # V, F = open_mesh_file()
 
 tri = Triangulation(V, F)
-triV, triE = tri.get_polyline()
-tri.flip(0, 2).print("Flipped")
+triV1, triE1 = tri.get_polyline()
+e2 = tri.flip_by(0, 2)
+e2 = (e2.origin, e2.get_dst())
 triV2, triE2 = tri.get_polyline()
-tri.flip(1, 0).print("Flipped")
+e3 = tri.flip_by(1, 0)
 triV3, triE3 = tri.get_polyline()
+e4 = tri.flip_by(1, 3)
+triV4, triE4 = tri.get_polyline()
+tri.flip(e4)
+tri.flip(e3)
+tri.flip_by(*e2)
+triV_restored, triE_restored = tri.get_polyline()
 
 init_polyscope()
 ps.register_surface_mesh("Mesh", V, F)
-ps.register_curve_network("Before", triV, triE)
-ps.register_curve_network("After", triV2, triE2)
-ps.register_curve_network("More", triV3, triE3)
+ps.register_curve_network("1", triV1, triE1)
+ps.register_curve_network("2", triV2, triE2)
+ps.register_curve_network("3", triV3, triE3)
+ps.register_curve_network("4", triV4, triE4)
+ps.register_curve_network("Restored", triV_restored, triE_restored)
+
+
+
 # ps.register_point_cloud("Midpoint", np.array([triV2[5]]))
 
 # a,b,c = triV2[4]

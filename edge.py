@@ -82,10 +82,49 @@ class HalfEdge(BaseHalfEdge):
     def get_angle(self):
         return self.angle
 
+    # auxiliary methods for init_midpoints
+    def get_initial_target_edge(self, mesh):
+        return mesh.get_opposite_edge(self.mesh_face_left, self.origin)
+
+    def get_next_target_edge(self, prev_midpoint, vec, e):
+        e1 = e.next
+        e2 = e1.next
+        opposite_vertex = e2.origin
+
+        segment = opposite_vertex - prev_midpoint
+        segment /= np.linalg.norm(segment)
+        angle = get_angle_between(segment, vec)
+        if angle < 0:
+            return e1
+        else:
+            return e2
+
+
+
     def init_midpoints(self, mesh):
         self.midpoints = []
         if not np.array_equal(self.mesh_face_left, self.mesh_face_right):
             return
+
+        dst = self.get_dst()
+
+        # initial values
+        prev_midpoint = mesh.V[self.origin]
+        vec = self.vec
+        e = self.get_initial_target_edge(mesh)
+
+        while True:
+            midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
+            self.midpoints.append(midpoint)
+
+            if e.twin.is_point_in_face(dst):
+                break
+
+            prev_midpoint = midpoint
+            vec = rotate(vec, e.mesh_face_angle, e.vec)
+            e = self.get_next_target_edge(prev_midpoint, vec, e)
+
+        return
 
         vec = self.vec
         f = self.mesh_face_left
@@ -96,23 +135,17 @@ class HalfEdge(BaseHalfEdge):
 
         dst = self.get_dst()
 
-        e = e.twin
-        f = [e.get_dst(), e.next.get_dst(), e.origin]
-        if dst in f:
+        if e.twin.is_point_in_face(dst):
             return
 
         vec = rotate(vec, e.mesh_face_angle, e.vec)
-        print(first_midpoint)
-        print(vec)
 
-        e = e.twin
         e1 = e.next
         e2 = e1.next
 
         e = e2   # by oracle
         second_midpoint = e.get_intersection(mesh.V, first_midpoint, vec)
         self.midpoints.append(second_midpoint)
-
 
     def get_midpoints(self):
         if self.midpoints is None and self.twin.midpoints is not None:
@@ -163,8 +196,11 @@ class HalfEdge(BaseHalfEdge):
         self.angle = get_angle(prev_len, self_len, next_len)
         next.angle = get_angle(self_len, next_len, prev_len)
 
-    def print(self, name=""):
-        print(name, " ", self.get_origin(), "->", self.get_dst())
+    def print(self, prefix=""):
+        print(prefix, self.a_name)
+
+    def print2(self, middle, other):
+        print(self.a_name, middle, other.a_name)
 
 
 class ExtrinsicHalfEdge(BaseHalfEdge):
@@ -196,3 +232,13 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
     def get_intersection(self, V, line_start, line_vec):
         self_start = V[self.origin]
         return get_closest_point(self_start, self.vec, line_start, line_vec)
+
+    def is_point_in_face(self, point, counter=0):
+        if counter == 3:
+            return False
+
+        if self.origin == point:
+            return True
+
+        return self.next.is_point_in_face(point, counter + 1)
+

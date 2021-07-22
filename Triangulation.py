@@ -19,10 +19,13 @@ class BaseTriangulation:
             if e.origin == origin:
                 return e
 
-        return None
-
-    def remove_edge(self, u, v):
+    def remove_edge_by(self, u, v):
         e = self.get_edge(u, v)
+        self.in_edges[v].remove(e)
+        self.in_edges[u].remove(e.twin)
+
+    def remove_edge(self, e):
+        u, v = e.origin, e.get_dst()
         self.in_edges[v].remove(e)
         self.in_edges[u].remove(e.twin)
 
@@ -95,9 +98,10 @@ class Triangulation(BaseTriangulation):
         self.add_edge(curr)
         return curr
 
-    def flip(self, origin, dst):
-        old_edge = self.get_edge(origin, dst)
+    def flip_by(self, origin, dst):
+        return self.flip(self.get_edge(origin, dst))
 
+    def flip(self, old_edge):
         triangle_1_prev = old_edge.next
         triangle_1_next = old_edge.twin.next.next
         triangle_1_angle = old_edge.twin.angle + triangle_1_prev.angle
@@ -107,9 +111,10 @@ class Triangulation(BaseTriangulation):
         triangle_2_angle = old_edge.angle + triangle_2_prev.angle
 
         if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
+            old_edge.print("No flip")
             return None
 
-        self.remove_edge(origin, dst)
+        self.remove_edge(old_edge)
 
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
@@ -117,13 +122,14 @@ class Triangulation(BaseTriangulation):
         e.midpoints = []
         e.init_midpoints(self.mesh)
 
+        old_edge.print2("Flipped into", e)
         return e
 
     def demo_flip(self):
         old = (0, 2)
         new = (1, 3)
         old_edge = self.get_edge(*old)
-        self.remove_edge(*old)
+        self.remove_edge(old_edge)
 
         # construct triangle 1
         e = self.construct_triangle_for_flip(None, old_edge.next, old_edge.twin.next.next)
