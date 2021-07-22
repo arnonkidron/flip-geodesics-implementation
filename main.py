@@ -4,10 +4,10 @@ from tkinter import Tk     # from tkinter import Tk for Python 3.x
 from tkinter.filedialog import askopenfilename
 
 import numpy as np
-from FlipEdgeNetwork import FlipEdgeNetwork
-from Triangulation import Triangulation
-from edge import Edge
-from Solver import Solver
+from FlipEdgeNetwork import *
+from Triangulation import *
+from edge import *
+from Solver import *
 
 
 def init_polyscope():
@@ -78,47 +78,65 @@ def get_example_shape():
     return V, F
 
 
+
 V, F = get_example_shape()
 # V, F = open_mesh_file()
 
-tri = Triangulation(V,F)
+tri = Triangulation(V, F)
 triV, triE = tri.get_polyline()
 tri.demo_flip()
 triV2, triE2 = tri.get_polyline()
 
-ps = init_polyscope()
-ps_mesh = ps.register_surface_mesh("Mesh", V, F)
-ps_path = ps.register_curve_network("Before", triV, triE)
-ps_path = ps.register_curve_network("After", triV2, triE2)
+init_polyscope()
+ps.register_surface_mesh("Mesh", V, F)
+ps.register_curve_network("Before", triV, triE)
+ps.register_curve_network("After", triV2, triE2)
+# ps.register_point_cloud("Midpoint", np.array([triV2[5]]))
+
+a,b,c = triV2[3]
+
+my_V = np.array([
+    [a,b,c],
+    [a+0,b+4,c-3],
+    [a+0,b+4,c-3],
+    [a-4,b-1,c-3],
+])
+
+# ps.register_curve_network("dir", my_V, np.array([[0, 1]]))
+# ps.register_curve_network("vec", my_V, np.array([[0, 2]]))
+# ps.register_curve_network("nearby", my_V, np.array([[0, 3]]))
+# ps.register_point_cloud("0", np.array([triV2[0]]))
+# ps.register_point_cloud("3", np.array([triV2[3]]))
+
 
 ps.show()
-exit()
-
-net = FlipEdgeNetwork(V, F)
-net.set_path([0,1,2])
-pathV, pathE = net.get_path_polyline()
-triV, triE = net.get_intrinsic_trinagulation_polyline()
-
-ps = init_polyscope()
-
-ps_mesh = ps.register_surface_mesh("Mesh", V, F)
-ps_path = ps.register_curve_network("Path", pathV, pathE)
-# ps_tri = ps.register_curve_network("Intrinsic Triangulation", triV, triE)
-
-
-# ps_e = ps.register_curve_network("Path", V, np.array([[0, 1], [1,2]]))
-# ps_t = ps.register_curve_network("Triangulation Edges", V, np.array([[0, 1], [1,2]]))
-# ps_v = ps.register_point_cloud("Path Vertices", np.array([V[0],V[1],V[2]]))
-
-## generate some random nodes and edges between them
-# nodes = np.random.rand(100, 3)
-# edges = np.random.randint(0, 100, size=(250,2))
-# ps_net = ps.register_curve_network("Mesh Edges", nodes, edges)
-
-
-# Pass control flow to polyscope, displaying the interactive window.
-# Function will return when user closes the window.
-ps.show()
-
-
-# ps.reset_camera_to_home_view()
+# exit()
+#
+# net = FlipEdgeNetwork(V, F)
+# net.set_path([0,1,2])
+# pathV, pathE = net.get_path_polyline()
+# triV, triE = net.get_intrinsic_trinagulation_polyline()
+#
+# ps = init_polyscope()
+#
+# ps_mesh = ps.register_surface_mesh("Mesh", V, F)
+# ps_path = ps.register_curve_network("Path", pathV, pathE)
+# # ps_tri = ps.register_curve_network("Intrinsic Triangulation", triV, triE)
+#
+#
+# # ps_e = ps.register_curve_network("Path", V, np.array([[0, 1], [1,2]]))
+# # ps_t = ps.register_curve_network("Triangulation Edges", V, np.array([[0, 1], [1,2]]))
+# # ps_v = ps.register_point_cloud("Path Vertices", np.array([V[0],V[1],V[2]]))
+#
+# ## generate some random nodes and edges between them
+# # nodes = np.random.rand(100, 3)
+# # edges = np.random.randint(0, 100, size=(250,2))
+# # ps_net = ps.register_curve_network("Mesh Edges", nodes, edges)
+#
+#
+# # Pass control flow to polyscope, displaying the interactive window.
+# # Function will return when user closes the window.
+# ps.show()
+#
+#
+# # ps.reset_camera_to_home_view()
