@@ -1,5 +1,5 @@
 import numpy as np
-from utils import get_angle, get_side_length
+from utils import get_angle, get_side_length, rotate, get_closest_point, get_angle_between
 
 
 class BaseHalfEdge:
@@ -10,8 +10,11 @@ class BaseHalfEdge:
         self.origin = origin
         self.next = None
 
-        self.vec = vec
-        self.aaaa = "{}->".format(origin)
+        self.vec = None
+        if vec is not None:
+            self.set_vec(vec)
+
+        self.a_name = "{}->".format(origin)
 
     def get_origin(self):
         return self.origin
@@ -25,9 +28,12 @@ class BaseHalfEdge:
     def get_vec(self):
         return self.vec
 
+    def set_vec(self, vec):
+        self.vec = vec / np.linalg.norm(vec)
+
     def set_next(self, next):
         self.next = next
-        self.aaaa += str(self.get_dst())
+        self.a_name += str(self.get_dst())
 
     def set_twin(self, twin):
         self.twin = twin
@@ -85,8 +91,28 @@ class HalfEdge(BaseHalfEdge):
         f = self.mesh_face_left
         e = mesh.get_opposite_edge(f, self.origin)
 
-        first_midpoint = e.get_intersection(mesh.V, self.origin, vec)
+        first_midpoint = e.get_intersection(mesh.V, mesh.V[self.origin], vec)
         self.midpoints.append(first_midpoint)
+
+        dst = self.get_dst()
+
+        e = e.twin
+        f = [e.get_dst(), e.next.get_dst(), e.origin]
+        if dst in f:
+            return
+
+        vec = rotate(vec, e.mesh_face_angle, e.vec)
+        print(first_midpoint)
+        print(vec)
+
+        e = e.twin
+        e1 = e.next
+        e2 = e1.next
+
+        e = e2   # by oracle
+        second_midpoint = e.get_intersection(mesh.V, first_midpoint, vec)
+        self.midpoints.append(second_midpoint)
+
 
     def get_midpoints(self):
         if self.midpoints is None and self.twin.midpoints is not None:
@@ -144,23 +170,29 @@ class HalfEdge(BaseHalfEdge):
 class ExtrinsicHalfEdge(BaseHalfEdge):
     def __init__(self, twin, origin, vec):
         super().__init__(twin, origin, vec)
+        self.face_normal = None
+        self.mesh_face_angle = None
+
+    def get_face_normal(self):
+        if self.face_normal is None:
+            # we may assume all vecs are normalized, because set_vec takes care of that
+            n = np.cross(self.vec, self.next.vec)
+
+            self.face_normal = n
+            self.next.face_normal = n
+            self.next.next.face_normal = n
+
+        return self.face_normal
+
+    def init_face_angle(self):
+        angle = get_angle_between(
+            self.get_face_normal(),
+            self.twin.get_face_normal()
+        )
+
+        self.mesh_face_angle = angle
+        self.twin.mesh_face_angle = angle
 
     def get_intersection(self, V, line_start, line_vec):
-        # project to plane
-        line_vec = np.array(line_vec)
-        line_vec /= np.linalg.norm(line_vec)
-        line_start = V[line_start]
-        plane_normal = line_vec
-        plane_point = V[self.origin]
-
-        t = np.dot(plane_normal, plane_point) - np.dot(plane_normal, line_start)
-        t /= np.dot(plane_normal, line_vec)
-        plane_proj = line_start + line_vec * t
-
-        edge_vec = self.vec
-        edge_start = plane_point
-        over = plane_proj - edge_start
-        s = np.dot(over, edge_vec) / np.dot(edge_vec, edge_vec)
-        edge_proj = edge_start + edge_vec * s
-        return edge_proj
-
+        self_start = V[self.origin]
+        return get_closest_point(self_start, self.vec, line_start, line_vec)

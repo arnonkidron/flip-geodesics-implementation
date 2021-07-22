@@ -96,14 +96,24 @@ ps.register_curve_network("After", triV2, triE2)
 ps.register_curve_network("More", triV3, triE3)
 # ps.register_point_cloud("Midpoint", np.array([triV2[5]]))
 
-a,b,c = triV2[4]
+# a,b,c = triV2[4]
+#
+# my_V = np.array([
+#     [a,b,c],
+#     [a-4,b+1,c-3],
+#     [a-3.8573,b-1.634,c-4.84234],
+#     [a-4,b+5,c],
+# ])
 
+a,b,c = 0, 4.10305913, -0.67270565
+aa, bb, cc = -0.67321047,  0.01882535,  0.73921124
 my_V = np.array([
     [a,b,c],
-    [a-4,b+1,c-3],
-    [a-3.8573,b-1.634,c-4.84234],
-    [a-4,b+5,c],
+    [a+aa,b+bb,c+cc],
+
 ])
+
+# ps.register_curve_network("post vec", my_V, np.array([[0, 1]]))
 
 # ps.register_curve_network("dir", my_V, np.array([[0, 1]]))
 # ps.register_curve_network("vec", my_V, np.array([[0, 2]]))

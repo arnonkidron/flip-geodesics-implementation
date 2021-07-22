@@ -26,12 +26,20 @@ class BaseTriangulation:
         self.in_edges[v].remove(e)
         self.in_edges[u].remove(e.twin)
 
+    def all_edges(self):
+        for v in range(len(self.in_edges)):
+            for e in self.in_edges[v]:
+                u = e.get_origin()
+                if u < v:
+                    yield e
+
 
 class Triangulation(BaseTriangulation):
     def __init__(self, V, F):
         super().__init__(V)
         self.mesh = ExtrinsicTriangulation(self.V)
         self.insert_mesh_edges(F)
+        self.mesh.init_face_angles()
 
     def insert_mesh_edges(self, F):
         """
@@ -64,26 +72,6 @@ class Triangulation(BaseTriangulation):
 
             # add to mesh as well
             self.mesh.add_triangle(sides)
-
-    # def get_angle(self, u, v, w):
-    #     e1, e2 = None, None
-    #     for e in self.in_edges[v]:
-    #         if e.has_endpoint(u):
-    #             e1 = e
-    #         elif e.has_endpoint(w):
-    #             e2 = e
-    #     if e1 is None or e2 is None:
-    #         raise("Cannot compute angle")
-    #         # return None
-    #
-    #     vec1 = e1.get_vec()
-    #     vec2 = e2.get_vec()
-    #
-    #     unit_vec1 = vec1 / np.linalg.norm(vec1)
-    #     unit_vec2 = vec2 / np.linalg.norm(vec2)
-    #     dot_product = np.dot(unit_vec1, unit_vec2)
-    #     angle = np.arccos(dot_product)
-    #     return angle
 
     def construct_triangle_for_flip(self, twin, prev, next, angle):
         f_left = prev.twin.mesh_face_right
@@ -145,13 +133,6 @@ class Triangulation(BaseTriangulation):
         e.init_midpoints(self.mesh)
         # e.midpoints.append([-7, 7, 7])
 
-    def all_edges(self):
-        for v in range(len(self.in_edges)):
-            for e in self.in_edges[v]:
-                u = e.get_origin()
-                if u < v:
-                    yield e
-
     def get_polyline(self):
         poly_vertices = deepcopy(self.V)
         poly_edges = []
@@ -198,10 +179,10 @@ class ExtrinsicTriangulation(BaseTriangulation):
             # add
             self.add_edge(e)
 
+    def init_face_angles(self):
+        for e in self.all_edges():
+            e.init_face_angle()
+
     def get_opposite_edge(self, f, v):
         verts = [u for u in f if u != v]
         return self.get_edge(verts[0], verts[1])
-
-
-
-
