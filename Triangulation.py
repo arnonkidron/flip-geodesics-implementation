@@ -188,7 +188,3 @@ class ExtrinsicTriangulation(BaseTriangulation):
     def init_face_angles(self):
         for e in self.all_edges():
             e.init_face_angle()
-
-    def get_opposite_edge(self, f, v):
-        verts = [u for u in f if u != v]
-        return self.get_edge(verts[0], verts[1])

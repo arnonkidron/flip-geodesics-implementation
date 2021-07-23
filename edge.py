@@ -84,9 +84,12 @@ class HalfEdge(BaseHalfEdge):
 
     # auxiliary methods for init_midpoints
     def get_initial_target_edge(self, mesh):
-        return mesh.get_opposite_edge(self.mesh_face_left, self.origin)
+        f = self.mesh_face_left
+        i = np.nonzero(f == self.origin)[0][0]
+        return mesh.get_edge(f[(i+1) % 3], f[(i+2) % 3])
 
-    def get_next_target_edge(self, prev_midpoint, vec, e):
+    @staticmethod
+    def get_next_target_edge(prev_midpoint, vec, e):
         e1 = e.next
         e2 = e1.next
         opposite_vertex = e2.origin
@@ -99,14 +102,28 @@ class HalfEdge(BaseHalfEdge):
         else:
             return e2
 
+    def restore_mesh_edge(self, mesh):
+        """
+        A method to be called when mesh edges are created by edge flips.
+        We replace its data with the exact data from the mesh.
+        """
+        f = self.next.mesh_face_left
+        self.mesh_face_left = f
+        self.twin.mesh_face_right = f
 
+        f = self.twin.next.mesh_face_left
+        self.mesh_face_right = f
+        self.twin.mesh_face_left = f
+
+        self.vec = mesh.get_edge(self.origin, self.get_dst()).vec
+        self.twin.vec = -self.vec
 
     def init_midpoints(self, mesh):
         self.midpoints = []
-        if not np.array_equal(self.mesh_face_left, self.mesh_face_right):
-            return
-
         dst = self.get_dst()
+        if dst in self.mesh_face_left:
+            self.restore_mesh_edge(mesh)
+            return
 
         # initial values
         prev_midpoint = mesh.V[self.origin]
@@ -117,35 +134,13 @@ class HalfEdge(BaseHalfEdge):
             midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
             self.midpoints.append(midpoint)
 
-            if e.twin.is_point_in_face(dst):
+            e = e.twin
+            if e.is_point_in_face(dst):
                 break
 
             prev_midpoint = midpoint
             vec = rotate(vec, e.mesh_face_angle, e.vec)
             e = self.get_next_target_edge(prev_midpoint, vec, e)
-
-        return
-
-        vec = self.vec
-        f = self.mesh_face_left
-        e = mesh.get_opposite_edge(f, self.origin)
-
-        first_midpoint = e.get_intersection(mesh.V, mesh.V[self.origin], vec)
-        self.midpoints.append(first_midpoint)
-
-        dst = self.get_dst()
-
-        if e.twin.is_point_in_face(dst):
-            return
-
-        vec = rotate(vec, e.mesh_face_angle, e.vec)
-
-        e1 = e.next
-        e2 = e1.next
-
-        e = e2   # by oracle
-        second_midpoint = e.get_intersection(mesh.V, first_midpoint, vec)
-        self.midpoints.append(second_midpoint)
 
     def get_midpoints(self):
         if self.midpoints is None and self.twin.midpoints is not None:
