@@ -14,7 +14,10 @@ class BaseHalfEdge:
             self.set_vec(vec)
 
         self.a_name = "{}->".format(origin)
-        self.visit_index = None
+
+        self.face_index = None
+        self.visited = False
+        self.mark_unvisited()
 
     @property
     def dst(self):
@@ -40,19 +43,15 @@ class BaseHalfEdge:
     #################
     #   traversal
     #################
-    UNVISITED = -1
 
     def mark_unvisited(self):
-        self.visit_index = self.UNVISITED
+        self.visited = False
+
+    def mark_visited(self):
+        self.visited = True
 
     def was_visited(self):
-        return self.visit_index != self.UNVISITED
-
-    def mark_visited(self, visit_index):
-        self.visit_index = visit_index
-
-    def get_visit_index(self):
-        return self.visit_index
+        return self.visited
 
 
 class HalfEdge(BaseHalfEdge):

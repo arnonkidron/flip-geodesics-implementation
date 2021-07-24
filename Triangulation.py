@@ -4,11 +4,37 @@ from copy import deepcopy
 from utils import turn, is_reflex
 import queue
 
+
 class BaseTriangulation:
     def __init__(self, V):
         self.V = V
         self.in_edges = [[] for _ in range(len(self.V))]
-        self.num_f = None
+
+    def get_wedge_angle(self, a, b, c):
+        """
+        from left, i.e. the clockwise angle
+        """
+        e1 = self.get_edge(a, b)
+        e2 = self.get_edge(b, c)
+
+        if e1 is None or e2 is None:
+            print("The vertices {}->{}->{} do not form a 2-path".format(a, b, c))
+            return None
+
+        if e1 == e2:
+            return 0
+
+        e = e1.next
+        sum = 0
+        while e != e2:
+            sum += e.angle
+            e = e.twin.next
+        sum += e.angle
+
+        return sum
+
+    def get_wedge_angle_counterclockwise(self, a, b, c):
+        return self.get_wedge_angle(c, b, a)
 
     def add_edge(self, e, dst=None):
         if dst is None:
@@ -20,10 +46,10 @@ class BaseTriangulation:
             if e.origin == origin:
                 return e
 
-    def remove_edge_by(self, u, v):
-        e = self.get_edge(u, v)
-        self.in_edges[v].remove(e)
-        self.in_edges[u].remove(e.twin)
+    def remove_edge_by(self, origin, dst):
+        e = self.get_edge(origin, dst)
+        self.in_edges[dst].remove(e)
+        self.in_edges[origin].remove(e.twin)
 
     def remove_edge(self, e):
         u, v = e.origin, e.dst
@@ -38,24 +64,25 @@ class BaseTriangulation:
                     yield e
 
     @staticmethod
-    def edges_in_face(e, visit_index):
+    def edges_in_face(e):
         while not e.was_visited():
-            e.mark_visited(visit_index)
+            e.mark_visited()
             yield e
             e = e.next
 
     def all_faces(self):
-        # mark unvisited
+        # mark all unvisited
         for edge_list in self.in_edges:
             for e in edge_list:
                 e.mark_unvisited()
 
+        # generate
         face_index = 0
         for edge_list in self.in_edges:
             for e in edge_list:
                 if e.was_visited():
                     continue
-                yield self.edges_in_face(e, face_index), face_index
+                yield self.edges_in_face(e), face_index
                 face_index += 1
 
     def find_shortest_path(self, src, dst):
@@ -101,8 +128,8 @@ class Triangulation(BaseTriangulation):
         self.insert_mesh_edges(F)
         self.mesh.init_face_angles()
 
-        self.num_f = len(F)
-        self.mesh.num_f = self.num_f
+        self.face_coloring = None
+        self.num_colors = None
 
     def insert_mesh_edges(self, F):
         """
@@ -137,6 +164,7 @@ class Triangulation(BaseTriangulation):
             self.mesh.add_triangle(sides)
 
     def construct_triangle_for_flip(self, twin, prev, next, angle):
+        # TODO: go over mesh to compute f_left, f_right correctly
         f_left = prev.twin.mesh_face_right
         f_right = prev.next.mesh_face_left
 
@@ -153,9 +181,21 @@ class Triangulation(BaseTriangulation):
         curr.angle = get_angle(prev.length, curr.length, next.length)
         next.angle = get_angle(curr.length, next.length, prev.length)
 
+        # TODO: traverse the mesh edges, and turn it piece by piece
         curr.vec = turn(prev.twin.vec, curr.angle, towards=dir)
 
         self.add_edge(curr)
+
+        if self.face_coloring is not None:
+            # reuse the old triangle face index
+            face_index = prev.face_index
+            curr.face_index = face_index
+            prev.mark_unvisited()
+            next.mark_unvisited()
+            if twin is None:
+                curr.mark_visited()
+            self.set_coloring(self.edges_in_face(next), face_index)
+
         return curr
 
     def flip_by(self, origin, dst):
@@ -192,20 +232,6 @@ class Triangulation(BaseTriangulation):
         old_edge.print2("Flipped into", e)
         return e
 
-    def demo_flip(self):
-        old = (0, 2)
-        new = (1, 3)
-        old_edge = self.get_edge(*old)
-        self.remove_edge(old_edge)
-
-        # construct triangle 1
-        e = self.construct_triangle_for_flip(None, old_edge.next, old_edge.twin.next.next)
-        self.construct_triangle_for_flip(e, old_edge.twin.next, old_edge.next.next)
-
-        e.midpoints = []
-        e.init_midpoints(self.mesh)
-        # e.midpoints.append([-7, 7, 7])
-
     def get_polyline(self):
         poly_vertices = deepcopy(self.V)
         poly_edges = []
@@ -236,28 +262,33 @@ class Triangulation(BaseTriangulation):
 
         return V, np.hstack(F)
 
-    def get_coloring(self, k):
-        c = np.zeros(self.num_f, dtype=int) - 1
-        for f, f_index in self.all_faces():
-            available = np.ones(k, dtype=bool)
-            for e in f:
-                if not e.twin.was_visited():
-                    continue
-                neighbour_index = e.twin.get_visit_index()
-                neighbour_color = c[neighbour_index]
-                available[neighbour_color] = False
+    def get_coloring(self):
+        return self.face_coloring
 
-            if not np.any(available):
-                print("Greedy coloring failed")
-                return None
+    def init_coloring(self, num_faces, num_colors):
+        self.face_coloring = np.zeros(num_faces, dtype=int) - 1
+        self.num_colors = num_colors
+        for face, face_index in self.all_faces():
+            self.set_coloring(face, face_index)
 
-            random_color = np.random.randint(0, k)
-            while not available[random_color]:
-                random_color = np.random.randint(0, k)
+    def set_coloring(self, face, face_index):
+        available = np.ones(self.num_colors, dtype=bool)
+        for e in face:
+            e.face_index = face_index
+            if not e.twin.was_visited():
+                continue
+            neighbour_index = e.twin.face_index
+            neighbour_color = self.face_coloring[neighbour_index]
+            available[neighbour_color] = False
 
-            c[f_index] = random_color
+        if not np.any(available):
+            print("Greedy coloring failed. Need more colors")
+            return None
 
-        return c
+        available, = np.where(available)
+        random_color = available[np.random.randint(0, len(available))]
+
+        self.face_coloring[face_index] = random_color
 
     def print(self):
         num_V = len(self.in_edges)

@@ -1,5 +1,4 @@
 import pyvista as pv
-import numpy as np
 
 
 class PathPicker:
@@ -10,21 +9,27 @@ class PathPicker:
         self.scene = scene
         self.show_path = True
         self.show_endpoints = True
-        self.show_midpoints = False
+        self.show_midpoints = True
 
         self.kwargs = kwargs
-        self.kwargs.setdefault('pickable', False)
         self.kwargs.setdefault('color', 'pink')
         self.kwargs.setdefault('point_size', 50)
-        # self.kwargs.setdefault('line_width', 5)
+        self.kwargs.setdefault('line_width', 5)
 
+        self.kwargs.setdefault('render_points_as_spheres', True)
+        self.kwargs.setdefault('pickable', False)
         self.kwargs.setdefault('reset_camera', False)
         self.path_name = '_picked_path'
 
         self.scene.plotter.add_key_event('c', self.on_clear)
         self.scene.plotter.add_key_event('z', self.on_undo)
-        self.scene.plotter.enable_point_picking(callback=self.on_pick, use_mesh=False,
-                                          tolerance=tolerance, show_point=False)
+        self.scene.plotter.enable_point_picking(
+            callback=self.on_pick,
+            use_mesh=False,
+            tolerance=tolerance,
+            show_point=False,
+            show_message=False,
+        )
 
     def is_empty(self):
         return len(self.indices) == 0
@@ -58,6 +63,8 @@ class PathPicker:
             self.indices = [idx]
             self.init_path_vertices()
         else:
+            if idx == self.last_index:
+                return
             self.update_path_vertices(point)
             self.update_path_edges(self.last_index, idx)
             self.indices.append(idx)

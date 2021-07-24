@@ -7,16 +7,20 @@ from Triangulation import *
 from edge import *
 from Solver import *
 from PathPicker import *
+from PathShortener import *
 
 ############################
 #    view preferences
 ############################
-MESH_EDGE_WIDTH = 0.5
+MESH_EDGE_WIDTH = 1
 TRIANGULATION_EDGE_WIDTH = 4
+PICKED_POINT_SIZE = 50
 PICKED_PATH_WIDTH = 30
 SHOW_MESH_EDGES = True
 SHOW_TRIANGULATION_EDGES = False
-SHOW_TRIANGULATION_FACES = False
+SHOW_TRIANGULATION_FACES = True
+MESH_EDGE_COLOR = 'Black'
+TRIANGULATION_EDGE_COLOR = 'Black'
 
 TRIANGULATION_FACES_COLOR_MAP = 'Accent'
 TRIANGULATION_FACES_COLOR_MAP_SIZE = 8
@@ -28,8 +32,10 @@ class Scene:
             url = self.ask_for_url()
         self.mesh_obj = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
-        self.tri_obj = self.set_up_intrinsic_mesh()
+        self.remove_extrinsic_mesh_faces()
+        self.tri_obj = self.set_up_intrinsic_triangulation()
         self.plotter = self.set_up_plotter()
+        self.path_shortener = PathShortener(self.tri)
         self.path_picker = self.set_up_path_picker()
         self.set_up_events()
 
@@ -52,13 +58,13 @@ class Scene:
         return mesh_url
 
     def set_up_extrinsic_mesh(self, url):
-        mesh = pv.read(url)
+        obj = pv.read(url)
 
-        if not mesh.is_all_triangles():
-            mesh.triangulate()
+        if not obj.is_all_triangles():
+            obj.triangulate()
 
-        self.mesh_obj = mesh
-        return mesh
+        self.mesh_obj = obj
+        return obj
 
     def set_up_triangulation(self):
         V = self.mesh_obj.points
@@ -66,60 +72,65 @@ class Scene:
         F = np.reshape(F, (len(F) // 4, 4))
         F = np.delete(F, 0, axis=1)
         tri = Triangulation(V, F)
+        tri.init_coloring(len(F), TRIANGULATION_FACES_COLOR_MAP_SIZE)
+
         self.tri = tri
         return tri
 
-    def set_up_intrinsic_mesh(self):
+    def set_up_intrinsic_triangulation(self):
         V, F = self.tri.get_faces()
         obj = pv.PolyData(V, F)
 
-        obj.cell_arrays['TriagColor'] = self.tri.get_coloring(TRIANGULATION_FACES_COLOR_MAP_SIZE)
+        obj.cell_arrays['TriagColoring'] = self.tri.get_coloring()
 
         self.tri_obj = obj
         return obj
 
-    def set_up_plotter(self):
-        plotter = pv.Plotter()
+    def remove_extrinsic_mesh_faces(self):
+        V, E = self.mesh_obj.points, self.mesh_obj.faces
+        self.mesh_obj = pv.PolyData(V, lines=E)
 
+    def set_up_plotter(self):
+        self.plotter = pv.Plotter()
+
+        self.add_extrinsic_mesh()
+        self.add_intrinsic_triangulation()
+
+        return self.plotter
+
+    def add_extrinsic_mesh(self):
+        mesh_kwargs = {
+            'name': 'mesh_edges',
+            'color': MESH_EDGE_COLOR,
+            'line_width': MESH_EDGE_WIDTH,
+            'show_edges': SHOW_MESH_EDGES,
+        }
+        self.plotter.add_mesh(self.mesh_obj, **mesh_kwargs)
+
+    def add_intrinsic_triangulation(self):
+        self.set_up_intrinsic_triangulation()
         tri_kwargs = {
-            'name': 'tri',
-            'edge_color': 'Black',
+            'edge_color': TRIANGULATION_EDGE_COLOR,
             'line_width': TRIANGULATION_EDGE_WIDTH,
             'show_edges': SHOW_TRIANGULATION_EDGES,
             'show_scalar_bar': False,
-        }
-        mesh_kwargs = {
-            'name': 'mesh',
-            'edge_color': 'Black',
-            'line_width': MESH_EDGE_WIDTH,
-            'show_edges': SHOW_MESH_EDGES,
-            'show_scalar_bar': False,
+            'render_points_as_spheres': True,
         }
         if SHOW_TRIANGULATION_FACES:
-            if SHOW_MESH_EDGES:
-                mesh_kwargs['style'] = 'wireframe'
-                mesh_kwargs['color'] = 'Black'
             tri_kwargs['cmap'] = TRIANGULATION_FACES_COLOR_MAP
-            self.tri_obj.set_active_scalars('TriagColor')
+            self.tri_obj.set_active_scalars('TriagColoring')
         else:
-            mesh_kwargs['color'] = 'Gold'
             tri_kwargs['color'] = 'Gold'
-            if SHOW_TRIANGULATION_EDGES:
-                tri_kwargs['color'] = 'Black'
-                tri_kwargs['style'] = 'wireframe'
             self.tri_obj.set_active_scalars(None)
 
-        # plotter.add_mesh(self.mesh_obj, **mesh_kwargs)
-        plotter.add_mesh(self.tri_obj, **tri_kwargs)
-
-        self.plotter = plotter
-        return plotter
+        self.plotter.remove_actor('tri')
+        self.plotter.add_mesh(self.tri_obj, **tri_kwargs, name='tri')
 
     def show(self):
         self.plotter.show()
 
     def set_up_path_picker(self):
-        path_picker = PathPicker(self, line_width=PICKED_PATH_WIDTH)
+        path_picker = PathPicker(self, line_width=PICKED_PATH_WIDTH, point_size=PICKED_POINT_SIZE)
 
         self.path_picker = path_picker
         return path_picker
@@ -151,19 +162,7 @@ class Scene:
         self.path_picker.on_clear()
 
         self.tri.flip(e)
-        self.set_up_intrinsic_mesh()
-        self.plotter.remove_actor('tri')
-        tri_kwargs = {
-            'name': 'tri',
-            'edge_color': 'Black',
-            'line_width': TRIANGULATION_EDGE_WIDTH,
-            'show_edges': SHOW_TRIANGULATION_EDGES,
-            'show_scalar_bar': False,
-            'cmap': TRIANGULATION_FACES_COLOR_MAP
-        }
-        self.tri_obj.set_active_scalars('TriagColor')
-
-        self.plotter.add_mesh(self.tri_obj, **tri_kwargs)
+        self.add_intrinsic_triangulation()
 
 
 
