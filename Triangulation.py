@@ -118,8 +118,21 @@ class BaseTriangulation:
             if v is None:
                 return None
         path.append(src)
-        return self.V[path]
+        path.reverse()
+        return path
 
+    def complete_path(self, indices):
+        """
+        Input: the indices of vertices in the path
+        Output: the list of all indices in between
+        """
+        output = []
+        for i in range(len(indices) - 1):
+            path = self.find_shortest_path(indices[i], indices[i+1])
+            path.pop()
+            output.extend(path)
+        output.append(indices[-1])
+        return output
 
 class Triangulation(BaseTriangulation):
     def __init__(self, V, F):

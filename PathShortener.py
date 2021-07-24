@@ -27,6 +27,7 @@ class PathShortener:
         pass
 
     def flipout_the_minimal_wedge(self):
+        print("Hi")
         # find minimal wedge
         # call self.flipout()
         pass

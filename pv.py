@@ -8,22 +8,7 @@ from edge import *
 from Solver import *
 from PathPicker import *
 from PathShortener import *
-
-############################
-#    view preferences
-############################
-MESH_EDGE_WIDTH = 1
-TRIANGULATION_EDGE_WIDTH = 4
-PICKED_POINT_SIZE = 50
-PICKED_PATH_WIDTH = 30
-SHOW_MESH_EDGES = True
-SHOW_TRIANGULATION_EDGES = False
-SHOW_TRIANGULATION_FACES = True
-MESH_EDGE_COLOR = 'Black'
-TRIANGULATION_EDGE_COLOR = 'Black'
-
-TRIANGULATION_FACES_COLOR_MAP = 'Accent'
-TRIANGULATION_FACES_COLOR_MAP_SIZE = 8
+import ViewPreferences as prefer
 
 
 class Scene:
@@ -72,7 +57,7 @@ class Scene:
         F = np.reshape(F, (len(F) // 4, 4))
         F = np.delete(F, 0, axis=1)
         tri = Triangulation(V, F)
-        tri.init_coloring(len(F), TRIANGULATION_FACES_COLOR_MAP_SIZE)
+        tri.init_coloring(len(F), prefer.TRIANGULATION_FACES_COLOR_MAP_SIZE)
 
         self.tri = tri
         return tri
@@ -101,23 +86,23 @@ class Scene:
     def add_extrinsic_mesh(self):
         mesh_kwargs = {
             'name': 'mesh_edges',
-            'color': MESH_EDGE_COLOR,
-            'line_width': MESH_EDGE_WIDTH,
-            'show_edges': SHOW_MESH_EDGES,
+            'color': prefer.MESH_EDGE_COLOR,
+            'line_width': prefer.MESH_EDGE_WIDTH,
+            'show_edges': prefer.SHOW_MESH_EDGES,
         }
         self.plotter.add_mesh(self.mesh_obj, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
         self.set_up_intrinsic_triangulation()
         tri_kwargs = {
-            'edge_color': TRIANGULATION_EDGE_COLOR,
-            'line_width': TRIANGULATION_EDGE_WIDTH,
-            'show_edges': SHOW_TRIANGULATION_EDGES,
+            'edge_color': prefer.TRIANGULATION_EDGE_COLOR,
+            'line_width': prefer.TRIANGULATION_EDGE_WIDTH,
+            'show_edges': prefer.SHOW_TRIANGULATION_EDGES,
             'show_scalar_bar': False,
             'render_points_as_spheres': True,
         }
-        if SHOW_TRIANGULATION_FACES:
-            tri_kwargs['cmap'] = TRIANGULATION_FACES_COLOR_MAP
+        if prefer.SHOW_TRIANGULATION_FACES:
+            tri_kwargs['cmap'] = prefer.TRIANGULATION_FACES_COLOR_MAP
             self.tri_obj.set_active_scalars('TriagColoring')
         else:
             tri_kwargs['color'] = 'Gold'
@@ -130,16 +115,23 @@ class Scene:
         self.plotter.show()
 
     def set_up_path_picker(self):
-        path_picker = PathPicker(self, line_width=PICKED_PATH_WIDTH, point_size=PICKED_POINT_SIZE)
+        path_picker = PathPicker(self, line_width=prefer.PICKED_PATH_WIDTH, point_size=prefer.PICKED_POINT_SIZE)
 
         self.path_picker = path_picker
         return path_picker
 
     def set_up_events(self):
-        self.plotter.add_key_event('[', self.on_single_source)
-        self.plotter.add_key_event('o', self.on_make_geodesic)
-        self.plotter.add_key_event('i', self.on_flip_out)
-        self.plotter.add_key_event('u', self.on_flip_edge)
+        bindings = {
+            prefer.KEY_EVENT_SINGLE_SOURCE_DIJKSTRA: self.on_single_source,
+            prefer.KEY_EVENT_MAKE_GEODESIC: self.on_make_geodesic,
+            prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
+            prefer.KEY_EVENT_EDGE_FLIP: self.on_flip_edge,
+            prefer.KEY_EVENT_SHOW_INFO: self.on_info,
+            prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.path_picker.on_clear,
+            prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
+        }
+        for key, callback in bindings.items():
+            self.plotter.add_key_event(key, callback)
 
     def on_single_source(self):
         idx = self.path_picker.get_single_point_index()
@@ -149,10 +141,14 @@ class Scene:
         pass
 
     def on_make_geodesic(self):
-        pass
+        path = self.path_picker.whole_path_indices
+        self.path_shortener.set_path(path)
+        self.path_shortener.make_geodesic()
 
     def on_flip_out(self):
-        pass
+        path = self.path_picker.whole_path_indices
+        self.path_shortener.set_path(path)
+        self.path_shortener.flipout_the_minimal_wedge()
 
     def on_flip_edge(self):
         e = self.path_picker.get_corresponding_edge(self.tri)
@@ -164,7 +160,8 @@ class Scene:
         self.tri.flip(e)
         self.add_intrinsic_triangulation()
 
-
+    def on_info(self):
+        pass
 
 
 scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')

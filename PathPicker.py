@@ -1,10 +1,11 @@
 import pyvista as pv
-
+import ViewPreferences as prefer
 
 class PathPicker:
     def __init__(self, scene, tolerance=0.025, **kwargs):
         self.path_obj = pv.PolyData()
         self.indices = []
+        self.whole_path_indices = []
 
         self.scene = scene
         self.show_path = True
@@ -12,17 +13,15 @@ class PathPicker:
         self.show_midpoints = True
 
         self.kwargs = kwargs
-        self.kwargs.setdefault('color', 'pink')
-        self.kwargs.setdefault('point_size', 50)
-        self.kwargs.setdefault('line_width', 5)
+        self.kwargs.setdefault('color', prefer.PICKED_PATH_COLOR)
+        self.kwargs.setdefault('point_size', prefer.PICKED_POINT_SIZE)
+        self.kwargs.setdefault('line_width', prefer.PICKED_PATH_WIDTH)
 
         self.kwargs.setdefault('render_points_as_spheres', True)
         self.kwargs.setdefault('pickable', False)
         self.kwargs.setdefault('reset_camera', False)
         self.path_name = '_picked_path'
 
-        self.scene.plotter.add_key_event('c', self.on_clear)
-        self.scene.plotter.add_key_event('z', self.on_undo)
         self.scene.plotter.enable_point_picking(
             callback=self.on_pick,
             use_mesh=False,
@@ -75,9 +74,13 @@ class PathPicker:
         last_point = self.scene.tri_obj.points[self.last_index]
         first_point = self.scene.tri_obj.points[self.indices[0]]
         self.path_obj = pv.PolyData([last_point, first_point])
+        self.whole_path_indices = [self.indices[0]]
 
     def update_path_edges(self, prev_idx, current_idx):
-        V = self.scene.tri.find_shortest_path(prev_idx, current_idx)
+        new_part = self.scene.tri.find_shortest_path(prev_idx, current_idx)
+        self.whole_path_indices.pop()
+        self.whole_path_indices.extend(new_part)
+        V = self.scene.tri.V[new_part]
         E = [len(V)] + list(range(len(V)))
         poly_data = pv.PolyData(V, lines=E)
         self.path_obj += poly_data
@@ -101,6 +104,7 @@ class PathPicker:
     def on_clear(self):
         self.path_obj = pv.PolyData()
         self.indices = []
+        self.whole_path_indices = []
         self.hide()
         return
 
@@ -110,7 +114,7 @@ class PathPicker:
 
         self.indices.pop()
         if self.is_empty():
-            self.hide()
+            self.on_clear()
             return
 
         self.path_obj = pv.PolyData()
@@ -119,6 +123,9 @@ class PathPicker:
 
         for i in range(len(self.indices) - 1):
             self.update_path_edges(self.indices[i], self.indices[i + 1])
+            if self.show_midpoints:
+                current_point = self.scene.tri_obj.points[self.indices[i]]
+                self.path_obj += pv.PolyData(current_point)
 
         self.show()
 
