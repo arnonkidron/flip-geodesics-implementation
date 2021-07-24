@@ -16,18 +16,18 @@ class Scene:
         if url is None:
             url = self.ask_for_url()
 
-        self.plotter = None
         self.plotter = pv.Plotter()
-        self.mesh_obj = self.set_up_extrinsic_mesh(url)
+        self.mesh_actor = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
-        self.tri_obj = None
+        self.tri_actor = None
 
         self.remove_extrinsic_mesh_faces()
-        self.add_extrinsic_mesh()
+        self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
         self.path_shortener = PathShortener(self.tri)
         self.path_picker = self.set_up_path_picker()
+        self.text_actor = None
         self.set_up_events()
 
     @staticmethod
@@ -52,17 +52,17 @@ class Scene:
         self.plotter.show()
 
     def set_up_extrinsic_mesh(self, url):
-        obj = pv.read(url)
+        actor = pv.read(url)
 
-        if not obj.is_all_triangles():
-            obj.triangulate()
+        if not actor.is_all_triangles():
+            actor.triangulate()
 
-        self.mesh_obj = obj
-        return obj
+        self.mesh_actor = actor
+        return actor
 
     def set_up_triangulation(self):
-        V = self.mesh_obj.points
-        F = self.mesh_obj.faces
+        V = self.mesh_actor.points
+        F = self.mesh_actor.faces
         F = np.reshape(F, (len(F) // 4, 4))
         F = np.delete(F, 0, axis=1)
         tri = Triangulation(V, F)
@@ -72,23 +72,23 @@ class Scene:
         return tri
 
     def remove_extrinsic_mesh_faces(self):
-        V, E = self.mesh_obj.points, self.mesh_obj.faces
-        self.mesh_obj = pv.PolyData(V, lines=E)
+        V, E = self.mesh_actor.points, self.mesh_actor.faces
+        self.mesh_actor = pv.PolyData(V, lines=E)
 
-    def add_extrinsic_mesh(self):
+    def add_extrinsic_mesh_actor(self):
         mesh_kwargs = {
             'name': 'mesh_edges',
             'color': prefer.MESH_EDGE_COLOR,
             'line_width': prefer.MESH_EDGE_WIDTH,
             'show_edges': prefer.SHOW_MESH_EDGES,
         }
-        self.plotter.add_mesh(self.mesh_obj, **mesh_kwargs)
+        self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
         # set up
         V, F, coloring = self.tri.get_poly_data()
-        self.tri_obj = pv.PolyData(V, F)
-        self.tri_obj.cell_arrays['TriagColoring'] = coloring
+        self.tri_actor = pv.PolyData(V, F)
+        self.tri_actor.cell_arrays['TriagColoring'] = coloring
 
         tri_kwargs = {
             'edge_color': prefer.TRIANGULATION_EDGE_COLOR,
@@ -99,13 +99,13 @@ class Scene:
         }
         if prefer.SHOW_TRIANGULATION_FACES:
             tri_kwargs['cmap'] = prefer.TRIANGULATION_FACES_COLOR_MAP
-            self.tri_obj.set_active_scalars('TriagColoring')
+            self.tri_actor.set_active_scalars('TriagColoring')
         else:
             tri_kwargs['color'] = 'Gold'
-            self.tri_obj.set_active_scalars(None)
+            self.tri_actor.set_active_scalars(None)
 
         self.plotter.remove_actor('tri')
-        self.plotter.add_mesh(self.tri_obj, **tri_kwargs, name='tri')
+        self.plotter.add_mesh(self.tri_actor, **tri_kwargs, name='tri')
 
     def set_up_path_picker(self):
         path_picker = PathPicker(self, line_width=prefer.PICKED_PATH_WIDTH, point_size=prefer.PICKED_POINT_SIZE)
@@ -122,6 +122,8 @@ class Scene:
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.path_picker.on_clear,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
+            prefer.KEY_EVENT_PICK_NEXT_EDGE: self.path_picker.on_pick_next_edge,
+            prefer.KEY_EVENT_PICK_TWIN_EDGE: self.path_picker.on_pick_twin_edge,
         }
         for key, callback in bindings.items():
             self.plotter.add_key_event(key, callback)
@@ -144,7 +146,7 @@ class Scene:
         self.path_shortener.flipout_the_minimal_wedge()
 
     def on_flip_edge(self):
-        e = self.path_picker.get_corresponding_edge(self.tri)
+        e = self.path_picker.get_corresponding_edge()
         if e is None:
             return
 
@@ -154,9 +156,38 @@ class Scene:
         self.add_intrinsic_triangulation()
 
     def on_info(self):
-        pass
+        msg = None
+
+        idx = self.path_picker.get_single_point_index()
+        if idx is not None:
+            coords = self.tri_actor.points[idx]
+            if self.path_picker.is_intersection_point(idx):
+                msg = "Intersection point\n" \
+                      "({:.4f},{:.4f},{:.4f})\n"\
+                    .format(coords[0], coords[1], coords[2])
+            else:
+                deg = len(self.tri.in_edges[idx])
+                msg = "Vertex #{}\n" \
+                      "({:.4f},{:.4f},{:.4f})\n" \
+                      "Degree {}\n"\
+                    .format(idx, coords[0], coords[1], coords[2], deg)
+
+        e = self.path_picker.get_corresponding_edge()
+        if e is not None:
+            msg = e.get_info()
+
+        self.remove_text()
+        if msg is None:
+            self.text_actor = None
+        else:
+            self.text_actor = self.plotter.add_text(msg, name='info')
+            print(msg)
+
+    def remove_text(self):
+        self.plotter.remove_actor(self.text_actor)
 
 
-scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
-scene.show()
+if __name__ == '__main__':
+    scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
+    scene.show()
 

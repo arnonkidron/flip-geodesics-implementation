@@ -1,5 +1,6 @@
 import numpy as np
 from utils import get_angle, get_side_length, rotate, get_closest_point, get_angle_between
+from math import degrees
 
 
 class BaseHalfEdge:
@@ -202,6 +203,20 @@ class HalfEdge(BaseHalfEdge):
 
     def print2(self, middle, other):
         print(self.a_name, middle, other.a_name)
+
+    def get_info(self):
+        origin, dst = self.origin, self.dst
+        return "Edge {}->{}\n" \
+               "Length {:.4f}\n" \
+               "Left_Angle {:.4f} radians ≈ {:.2f}°\n" \
+               "Start_Vec ({:.4f},{:.4f},{:.4f})\n" \
+               "Mesh_face_left: [{},{},{}]\n" \
+               "Mesh_face_right: [{},{},{}]\n" \
+            .format(origin, dst, self.length, self.angle, degrees(self.angle),
+                    self.vec[0], self.vec[1], self.vec[2],
+                    self.mesh_face_left[0], self.mesh_face_left[1], self.mesh_face_left[2],
+                    self.mesh_face_right[0], self.mesh_face_right[1], self.mesh_face_right[2]
+                    )
 
 
 class ExtrinsicHalfEdge(BaseHalfEdge):

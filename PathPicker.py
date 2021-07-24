@@ -1,9 +1,10 @@
 import pyvista as pv
 import ViewPreferences as prefer
 
+
 class PathPicker:
     def __init__(self, scene, tolerance=0.025, **kwargs):
-        self.path_obj = pv.PolyData()
+        self.path_actor = pv.PolyData()
         self.indices = []
         self.whole_path_indices = []
 
@@ -11,6 +12,7 @@ class PathPicker:
         self.show_path = True
         self.show_endpoints = True
         self.show_midpoints = True
+        self.allow_pick_intersection_points_of_mesh_and_triangulation = False
 
         self.kwargs = kwargs
         self.kwargs.setdefault('color', prefer.PICKED_PATH_COLOR)
@@ -43,21 +45,50 @@ class PathPicker:
 
         return self.indices[0]
 
-    def get_corresponding_edge(self, triangulation):
+    def get_corresponding_edge(self):
         """
-        Input: a triangulation object
-        Output: if then picked path is an edge in the triangulation, return it
-                else, None
+        if the picked path is an edge in the triangulation, return it
+        else, None
         """
         if len(self.indices) != 2:
             return None
 
-        return triangulation.get_edge(self.indices[0], self.indices[1])
+        return self.scene.tri.get_edge(self.indices[0], self.indices[1])
+
+    def on_pick_next_edge(self):
+        e = self.get_corresponding_edge()
+        if e is None:
+            return
+        self.pick_edge(e.next)
+
+    def on_pick_twin_edge(self):
+        e = self.get_corresponding_edge()
+        if e is None:
+            return
+        self.pick_edge(e.twin)
+
+    def pick_edge(self, e):
+        self.indices = [e.origin, e.dst]
+        self.reconstruct_by_indices()
+        self.scene.on_info()
+
+    def is_intersection_point(self, idx):
+        return idx >= self.scene.mesh_actor.n_points
 
     def on_pick(self, input_point):
-        idx = self.scene.mesh_obj.find_closest_point(input_point)
+        point_finder = self.scene.mesh_actor
+        if self.allow_pick_intersection_points_of_mesh_and_triangulation:
+            point_finder = self.scene.tri_actor
+        idx = point_finder.find_closest_point(input_point)
+        point = point_finder.points[idx]
 
-        point = self.scene.tri_obj.points[idx]
+        if self.allow_pick_intersection_points_of_mesh_and_triangulation:
+            # if the current or the last point is such,
+            # then clear the path before moving on
+            if self.is_intersection_point(idx) \
+                    or (not self.is_empty() and self.is_intersection_point(self.last_index)):
+                self.on_clear()
+
         if self.is_empty():
             self.indices = [idx]
             self.init_path_vertices()
@@ -68,44 +99,50 @@ class PathPicker:
             self.update_path_edges(self.last_index, idx)
             self.indices.append(idx)
 
-        self.show()
+        self.add_actor()
 
     def init_path_vertices(self):
-        last_point = self.scene.tri_obj.points[self.last_index]
-        first_point = self.scene.tri_obj.points[self.indices[0]]
-        self.path_obj = pv.PolyData([last_point, first_point])
+        last_point = self.scene.tri_actor.points[self.last_index]
+        first_point = self.scene.tri_actor.points[self.indices[0]]
+        self.path_actor = pv.PolyData([last_point, first_point])
         self.whole_path_indices = [self.indices[0]]
 
     def update_path_edges(self, prev_idx, current_idx):
         new_part = self.scene.tri.find_shortest_path(prev_idx, current_idx)
         self.whole_path_indices.pop()
         self.whole_path_indices.extend(new_part)
+
         V = self.scene.tri.V[new_part]
-        E = [len(V)] + list(range(len(V)))
+        E = [2 * len(V) - 1]
+        rang = list(range(len(V)))
+        E += rang
+        rang.reverse()
+        E += rang
         poly_data = pv.PolyData(V, lines=E)
-        self.path_obj += poly_data
+        self.path_actor += poly_data
 
     def update_path_vertices(self, current_point):
         if self.show_midpoints:
-            self.path_obj += pv.PolyData(current_point)
+            self.path_actor += pv.PolyData(current_point)
         elif self.show_endpoints:
-            self.path_obj.points[0] = current_point
+            self.path_actor.points[0] = current_point
         elif len(self.indices) == 2:
-            self.path_obj = pv.PolyData()
+            self.path_actor = pv.PolyData()
 
-    def show(self):
+    def add_actor(self):
         if self.show_path:
-            self.hide()
-            self.scene.plotter.add_mesh(self.path_obj, **self.kwargs, name=self.path_name)
+            self.remove_actor()
+            self.scene.plotter.add_mesh(self.path_actor, **self.kwargs, name=self.path_name)
 
-    def hide(self):
+    def remove_actor(self):
         self.scene.plotter.remove_actor(self.path_name)
 
     def on_clear(self):
-        self.path_obj = pv.PolyData()
+        self.path_actor = pv.PolyData()
         self.indices = []
         self.whole_path_indices = []
-        self.hide()
+        self.remove_actor()
+        self.scene.remove_text()
         return
 
     def on_undo(self):
@@ -117,17 +154,21 @@ class PathPicker:
             self.on_clear()
             return
 
-        self.path_obj = pv.PolyData()
+        self.reconstruct_by_indices()
+        self.scene.remove_text()
+
+    def reconstruct_by_indices(self):
+        self.path_actor = pv.PolyData()
         if self.show_endpoints or len(self.indices) == 1:
             self.init_path_vertices()
 
         for i in range(len(self.indices) - 1):
             self.update_path_edges(self.indices[i], self.indices[i + 1])
             if self.show_midpoints:
-                current_point = self.scene.tri_obj.points[self.indices[i]]
-                self.path_obj += pv.PolyData(current_point)
+                current_point = self.scene.tri_actor.points[self.indices[i]]
+                self.path_actor += pv.PolyData(current_point)
 
-        self.show()
+        self.add_actor()
 
 
 

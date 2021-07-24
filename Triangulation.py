@@ -197,7 +197,7 @@ class Triangulation(BaseTriangulation):
 
         self.add_edge(curr)
 
-        if self.face_coloring is not None:
+        if prev.face_color is not None:
             prev.mark_unvisited()
             next.mark_unvisited()
             if twin is None:
@@ -312,6 +312,16 @@ class Triangulation(BaseTriangulation):
                     ch = "V"
                 print(ch, end=" ")
             print("")
+
+    def get_vertex_info(self, idx):
+        coords = self.V[idx]
+        deg = len(self.in_edges[idx])
+        return "Vertex #{}\n" \
+               "({:.4f},{:.4f},{:.4f})\n" \
+               "Degree {}\n"\
+            .format(idx, coords[0], coords[1], coords[2], deg)
+
+
 
 
 class ExtrinsicTriangulation(BaseTriangulation):
