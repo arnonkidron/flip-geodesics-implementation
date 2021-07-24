@@ -77,13 +77,11 @@ class BaseTriangulation:
                 e.mark_unvisited()
 
         # generate
-        face_index = 0
         for edge_list in self.in_edges:
             for e in edge_list:
                 if e.was_visited():
                     continue
-                yield self.edges_in_face(e), face_index
-                face_index += 1
+                yield self.edges_in_face(e)
 
     def find_shortest_path(self, src, dst):
         num_v = len(self.V)
@@ -134,6 +132,7 @@ class BaseTriangulation:
         output.append(indices[-1])
         return output
 
+
 class Triangulation(BaseTriangulation):
     def __init__(self, V, F):
         super().__init__(V)
@@ -141,7 +140,6 @@ class Triangulation(BaseTriangulation):
         self.insert_mesh_edges(F)
         self.mesh.init_face_angles()
 
-        self.face_coloring = None
         self.num_colors = None
 
     def insert_mesh_edges(self, F):
@@ -200,14 +198,11 @@ class Triangulation(BaseTriangulation):
         self.add_edge(curr)
 
         if self.face_coloring is not None:
-            # reuse the old triangle face index
-            face_index = prev.face_index
-            curr.face_index = face_index
             prev.mark_unvisited()
             next.mark_unvisited()
             if twin is None:
                 curr.mark_visited()
-            self.set_coloring(self.edges_in_face(next), face_index)
+            self.set_coloring(self.edges_in_face(next))
 
         return curr
 
@@ -256,10 +251,11 @@ class Triangulation(BaseTriangulation):
 
         return poly_vertices, np.array(poly_edges)
 
-    def get_faces(self):
+    def get_poly_data(self):
         V = deepcopy(self.V)
         F = []
-        for f, _ in self.all_faces():
+        coloring = []
+        for f in self.all_faces():
             points = [0]
             for e in f:
                 points.append(e.origin)
@@ -270,28 +266,25 @@ class Triangulation(BaseTriangulation):
                     V = np.vstack((V, midpoints))
                     points.extend(list(range(num_midpoints)))
 
+            coloring.append(e.face_color)
+
             points[0] = len(points) - 1
             F.append(points)
 
-        return V, np.hstack(F)
-
-    def get_coloring(self):
-        return self.face_coloring
+        return V, np.hstack(F), coloring
 
     def init_coloring(self, num_faces, num_colors):
         self.face_coloring = np.zeros(num_faces, dtype=int) - 1
         self.num_colors = num_colors
-        for face, face_index in self.all_faces():
-            self.set_coloring(face, face_index)
+        for face in self.all_faces():
+            self.set_coloring(face)
 
-    def set_coloring(self, face, face_index):
+    def set_coloring(self, face):
         available = np.ones(self.num_colors, dtype=bool)
         for e in face:
-            e.face_index = face_index
             if not e.twin.was_visited():
                 continue
-            neighbour_index = e.twin.face_index
-            neighbour_color = self.face_coloring[neighbour_index]
+            neighbour_color = e.twin.face_color
             available[neighbour_color] = False
 
         if not np.any(available):
@@ -301,7 +294,9 @@ class Triangulation(BaseTriangulation):
         available, = np.where(available)
         random_color = available[np.random.randint(0, len(available))]
 
-        self.face_coloring[face_index] = random_color
+        e.face_color = random_color
+        e.next.face_color = random_color
+        e.next.next.face_color = random_color
 
     def print(self):
         num_V = len(self.in_edges)

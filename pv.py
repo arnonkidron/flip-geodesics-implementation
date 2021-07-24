@@ -15,11 +15,17 @@ class Scene:
     def __init__(self, url=None):
         if url is None:
             url = self.ask_for_url()
+
+        self.plotter = None
+        self.plotter = pv.Plotter()
         self.mesh_obj = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
+        self.tri_obj = None
+
         self.remove_extrinsic_mesh_faces()
-        self.tri_obj = self.set_up_intrinsic_triangulation()
-        self.plotter = self.set_up_plotter()
+        self.add_extrinsic_mesh()
+        self.add_intrinsic_triangulation()
+
         self.path_shortener = PathShortener(self.tri)
         self.path_picker = self.set_up_path_picker()
         self.set_up_events()
@@ -42,6 +48,9 @@ class Scene:
 
         return mesh_url
 
+    def show(self):
+        self.plotter.show()
+
     def set_up_extrinsic_mesh(self, url):
         obj = pv.read(url)
 
@@ -62,26 +71,9 @@ class Scene:
         self.tri = tri
         return tri
 
-    def set_up_intrinsic_triangulation(self):
-        V, F = self.tri.get_faces()
-        obj = pv.PolyData(V, F)
-
-        obj.cell_arrays['TriagColoring'] = self.tri.get_coloring()
-
-        self.tri_obj = obj
-        return obj
-
     def remove_extrinsic_mesh_faces(self):
         V, E = self.mesh_obj.points, self.mesh_obj.faces
         self.mesh_obj = pv.PolyData(V, lines=E)
-
-    def set_up_plotter(self):
-        self.plotter = pv.Plotter()
-
-        self.add_extrinsic_mesh()
-        self.add_intrinsic_triangulation()
-
-        return self.plotter
 
     def add_extrinsic_mesh(self):
         mesh_kwargs = {
@@ -93,7 +85,11 @@ class Scene:
         self.plotter.add_mesh(self.mesh_obj, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
-        self.set_up_intrinsic_triangulation()
+        # set up
+        V, F, coloring = self.tri.get_poly_data()
+        self.tri_obj = pv.PolyData(V, F)
+        self.tri_obj.cell_arrays['TriagColoring'] = coloring
+
         tri_kwargs = {
             'edge_color': prefer.TRIANGULATION_EDGE_COLOR,
             'line_width': prefer.TRIANGULATION_EDGE_WIDTH,
@@ -110,9 +106,6 @@ class Scene:
 
         self.plotter.remove_actor('tri')
         self.plotter.add_mesh(self.tri_obj, **tri_kwargs, name='tri')
-
-    def show(self):
-        self.plotter.show()
 
     def set_up_path_picker(self):
         path_picker = PathPicker(self, line_width=prefer.PICKED_PATH_WIDTH, point_size=prefer.PICKED_POINT_SIZE)
@@ -166,55 +159,4 @@ class Scene:
 
 scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
 scene.show()
-
-
-
-
-
-exit()
-
-from pyvista import examples
-
-# Load a global topography surface and decimate it
-land = examples.download_topo_land().triangulate().decimate(0.98)
-
-cape_town = land.find_closest_point((0.790801, 0.264598, -0.551942))
-dubai = land.find_closest_point((0.512642, 0.745898, 0.425255))
-bangkok = land.find_closest_point((-0.177077, 0.955419, 0.236273))
-rome = land.find_closest_point((0.718047, 0.163038, 0.676684))
-
-a = land.geodesic(cape_town, dubai)
-b = land.geodesic(cape_town, bangkok)
-c = land.geodesic(cape_town, rome)
-
-
-
-def picker(event):
-    print("A")
-
-# mesh points
-vertices = np.array([[0, 0, 0],
-                     [1, 0, 0],
-                     [1, 1, 0],
-                     [0, 1, 0],
-                     [0.5, 0.5, -1]])
-
-# mesh faces
-faces = np.hstack([[4, 0, 1, 2, 3],  # square
-                   [3, 0, 1, 4],     # triangle
-                   [3, 1, 2, 4]])    # triangle
-
-surf = pv.PolyData(vertices, faces)
-
-plotter = pv.Plotter()
-# plotter.add_mesh(surf)
-plotter.add_mesh(a+b+c, line_width=10, color="red", label="Geodesic Path")
-plotter.add_mesh(land, show_edges=True)
-plotter.add_legend()
-
-plotter.enable_path_picking(callback=picker, show_message=False)
-plotter.show()
-
-# plot each face with a different color
-# surf.plot(scalars=np.arange(3), cpos=[-1, 1, 0.5])
 

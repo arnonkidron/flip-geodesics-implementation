@@ -15,7 +15,7 @@ class BaseHalfEdge:
 
         self.a_name = "{}->".format(origin)
 
-        self.face_index = None
+        self.face_color = None
         self.visited = False
         self.mark_unvisited()
 
