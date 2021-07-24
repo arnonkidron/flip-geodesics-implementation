@@ -188,6 +188,7 @@ class Scene:
 
 
 if __name__ == '__main__':
-    scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
+    # scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
+    scene = Scene()
     scene.show()
 

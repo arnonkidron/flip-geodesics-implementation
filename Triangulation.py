@@ -263,8 +263,10 @@ class Triangulation(BaseTriangulation):
                 midpoints = e.get_midpoints()
                 num_midpoints = len(midpoints)
                 if num_midpoints > 0:
+                    index_begin = len(V)
                     V = np.vstack((V, midpoints))
-                    points.extend(list(range(num_midpoints)))
+                    index_end = len(V)
+                    points.extend(list(range(index_begin, index_end)))
 
             coloring.append(e.face_color)
 
