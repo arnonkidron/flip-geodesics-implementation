@@ -21,7 +21,6 @@ class Scene:
         self.tri = self.set_up_triangulation()
         self.tri_actor = None
 
-        self.remove_extrinsic_mesh_faces()
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
@@ -54,15 +53,21 @@ class Scene:
     def set_up_extrinsic_mesh(self, url):
         actor = pv.read(url)
 
-        if not actor.is_all_triangles():
-            actor.triangulate()
+        if hasattr(actor, 'is_all_triangles'):
+            if not actor.is_all_triangles():
+                actor.triangulate()
 
-        self.mesh_actor = actor
-        return actor
+        V = actor.points
+        if hasattr(actor, 'faces'):
+            E = actor.faces
+        else:
+            E = actor.cells
+        self.mesh_actor = pv.PolyData(V, lines=E)
+        return self.mesh_actor
 
     def set_up_triangulation(self):
         V = self.mesh_actor.points
-        F = self.mesh_actor.faces
+        F = self.mesh_actor.lines
         F = np.reshape(F, (len(F) // 4, 4))
         F = np.delete(F, 0, axis=1)
         tri = Triangulation(V, F)
@@ -70,10 +75,6 @@ class Scene:
 
         self.tri = tri
         return tri
-
-    def remove_extrinsic_mesh_faces(self):
-        V, E = self.mesh_actor.points, self.mesh_actor.faces
-        self.mesh_actor = pv.PolyData(V, lines=E)
 
     def add_extrinsic_mesh_actor(self):
         mesh_kwargs = {
