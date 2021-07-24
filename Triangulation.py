@@ -180,7 +180,10 @@ class Triangulation(BaseTriangulation):
         next.angle = get_angle(curr.length, next.length, prev.length)
 
         # TODO: traverse the mesh edges, and turn it piece by piece
-        curr.vec = turn(prev.twin.vec, curr.angle, towards=dir)
+        curr.init_near_mesh_edge()
+
+        # curr.vec = turn(prev.twin.vec, curr.angle, towards=dir)
+        curr.vec = curr.get_vec_by_near_mesh_edge()
 
         self.add_edge(curr)
 

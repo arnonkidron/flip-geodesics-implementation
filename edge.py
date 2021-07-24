@@ -1,6 +1,6 @@
 import numpy as np
-from utils import get_angle, get_side_length, rotate, get_closest_point, get_angle_between
-from math import degrees
+from utils import get_angle, get_side_length, rotate, turn, get_closest_point, get_angle_between
+from math import degrees, isclose
 
 
 class BaseHalfEdge:
@@ -9,6 +9,8 @@ class BaseHalfEdge:
 
         self.origin = origin
         self.next = None
+
+        self.angle = None
 
         self.vec = None
         if vec is not None:
@@ -70,9 +72,11 @@ class HalfEdge(BaseHalfEdge):
 
         self.mesh_face_left = mesh_face_left
         self.mesh_face_right = mesh_face_right
-        self.angle = None
         self.length = None
         self.midpoints = None
+
+        self.near_mesh_edge = None
+        self.angle_from_near_mesh_edge = None
 
         self.is_done_init_midpoints = None
         self.midpoints_generator = None
@@ -94,7 +98,36 @@ class HalfEdge(BaseHalfEdge):
         return obj
 
     def to_extrinsic(self):
-        return ExtrinsicHalfEdge(None, self.origin, self.vec)
+        ex_half_edge = ExtrinsicHalfEdge(None, self.origin, self.vec)
+        ex_half_edge.angle = self.angle
+        self.near_mesh_edge = ex_half_edge
+        self.angle_from_near_mesh_edge = 0
+        return ex_half_edge
+
+    def init_near_mesh_edge(self):
+        neighbour = self.next.next.twin
+        self.near_mesh_edge = neighbour.near_mesh_edge
+        self.angle_from_near_mesh_edge = \
+            neighbour.angle_from_near_mesh_edge \
+            + self.angle
+
+        next_mesh_edge = self.near_mesh_edge.twin.next
+        while self.angle_from_near_mesh_edge > next_mesh_edge.angle:
+            self.angle_from_near_mesh_edge -= next_mesh_edge.angle
+            self.near_mesh_edge = next_mesh_edge
+            next_mesh_edge = self.near_mesh_edge.twin.next
+
+        if isclose(self.angle_from_near_mesh_edge, next_mesh_edge.angle):
+            self.near_mesh_edge = next_mesh_edge
+            self.angle_from_near_mesh_edge = 0
+
+    def get_vec_by_near_mesh_edge(self):
+        next_mesh_edge = self.near_mesh_edge.twin.next
+        return turn(
+            self.near_mesh_edge.vec,
+            self.angle_from_near_mesh_edge,
+            towards=next_mesh_edge.vec
+        )
 
     # auxiliary methods for init_midpoints
     def get_initial_target_edge(self, mesh):
@@ -142,6 +175,7 @@ class HalfEdge(BaseHalfEdge):
         dst = self.dst
         if dst in self.mesh_face_left:
             self.restore_mesh_edge(mesh)
+            print("Solved by restore")
             return
 
         self.is_done_init_midpoints = False
@@ -214,7 +248,6 @@ class HalfEdge(BaseHalfEdge):
         print(self.a_name, middle, other.a_name)
 
     def get_info(self):
-        origin, dst = self.origin, self.dst
 
         n_mid = len(self.midpoints)
         if self.is_done_init_midpoints:
@@ -224,12 +257,18 @@ class HalfEdge(BaseHalfEdge):
 
         return "Edge {}->{}\n" \
                "Length {:.4f}\n" \
-               "Left_Angle {:.4f} radians ≈ {:.2f}°\n" \
+               "Left_Angle {:.3f} radians ≈ {:.1f}°\n" \
                "Start_Vec ({:.4f},{:.4f},{:.4f})\n" \
+               "Near Mesh Edge {}->{}\n" \
+               "Angle_from_it {:.3f} radians ≈ {:.1f}°\n" \
                "Mesh_face_left: [{},{},{}]\n" \
                "Mesh_face_right: [{},{},{}]\n" \
-            .format(origin, dst, self.length, self.angle, degrees(self.angle),
+            .format(self.origin, self.dst,
+                    self.length,
+                    self.angle, degrees(self.angle),
                     self.vec[0], self.vec[1], self.vec[2],
+                    self.near_mesh_edge.origin, self.near_mesh_edge.dst,
+                    self.angle_from_near_mesh_edge, degrees(self.angle_from_near_mesh_edge),
                     self.mesh_face_left[0], self.mesh_face_left[1], self.mesh_face_left[2],
                     self.mesh_face_right[0], self.mesh_face_right[1], self.mesh_face_right[2]
                     ) + midpoint_report
@@ -253,6 +292,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         return self.face_normal
 
     def init_face_angle(self):
+        # TODO: find why this fails so terribly
         angle = get_angle_between(
             self.get_face_normal(),
             self.twin.get_face_normal()
