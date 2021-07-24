@@ -74,6 +74,9 @@ class HalfEdge(BaseHalfEdge):
         self.length = None
         self.midpoints = None
 
+        self.is_done_init_midpoints = None
+        self.midpoints_generator = None
+
     @staticmethod
     def construct(twin, origin, mesh_face_left, vec):
         """
@@ -130,6 +133,7 @@ class HalfEdge(BaseHalfEdge):
         self.twin.vec = -self.vec
 
     def init_midpoints(self, mesh):
+        self.is_done_init_midpoints = True
         if self.midpoints is not None \
                 or self.twin.midpoints is not None:
             return
@@ -140,14 +144,17 @@ class HalfEdge(BaseHalfEdge):
             self.restore_mesh_edge(mesh)
             return
 
+        self.is_done_init_midpoints = False
+
         # initial values
         prev_midpoint = mesh.V[self.origin]
         vec = self.vec
         e = self.get_initial_target_edge(mesh)
 
-        while True:
+        while len(self.midpoints) < 200:
             midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
             self.midpoints.append(midpoint)
+            yield
 
             e = e.twin
             if e.is_point_in_face(dst):
@@ -156,6 +163,8 @@ class HalfEdge(BaseHalfEdge):
             prev_midpoint = midpoint
             vec = rotate(vec, e.mesh_face_angle, e.vec)
             e = self.get_next_target_edge(prev_midpoint, vec, e)
+
+        self.is_done_init_midpoints = True
 
     def get_midpoints(self):
         if self.midpoints is None and self.twin.midpoints is not None:
@@ -206,6 +215,13 @@ class HalfEdge(BaseHalfEdge):
 
     def get_info(self):
         origin, dst = self.origin, self.dst
+
+        n_mid = len(self.midpoints)
+        if self.is_done_init_midpoints:
+            midpoint_report = "Done with {} midpoints\n".format(n_mid)
+        else:
+            midpoint_report = "Ongoing with {} midpoints\n".format(n_mid)
+
         return "Edge {}->{}\n" \
                "Length {:.4f}\n" \
                "Left_Angle {:.4f} radians ≈ {:.2f}°\n" \
@@ -216,7 +232,7 @@ class HalfEdge(BaseHalfEdge):
                     self.vec[0], self.vec[1], self.vec[2],
                     self.mesh_face_left[0], self.mesh_face_left[1], self.mesh_face_left[2],
                     self.mesh_face_right[0], self.mesh_face_right[1], self.mesh_face_right[2]
-                    )
+                    ) + midpoint_report
 
 
 class ExtrinsicHalfEdge(BaseHalfEdge):

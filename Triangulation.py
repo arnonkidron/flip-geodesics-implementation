@@ -119,19 +119,6 @@ class BaseTriangulation:
         path.reverse()
         return path
 
-    def complete_path(self, indices):
-        """
-        Input: the indices of vertices in the path
-        Output: the list of all indices in between
-        """
-        output = []
-        for i in range(len(indices) - 1):
-            path = self.find_shortest_path(indices[i], indices[i+1])
-            path.pop()
-            output.extend(path)
-        output.append(indices[-1])
-        return output
-
 
 class Triangulation(BaseTriangulation):
     def __init__(self, V, F):
@@ -235,7 +222,7 @@ class Triangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
-        e.init_midpoints(self.mesh)
+        e.midpoints_generator = e.init_midpoints(self.mesh)
 
         old_edge.print2("Flipped into", e)
         return e

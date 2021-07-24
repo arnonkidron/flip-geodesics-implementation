@@ -33,7 +33,7 @@ class PathShortener:
         pass
 
     def make_geodesic(self):
-        while not self.is_geodesic():
+        while not self.is_geodesic() and False:
             self.flipout_the_minimal_wedge()
 
     def is_geodesic(self):

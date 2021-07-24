@@ -21,6 +21,8 @@ class Scene:
         self.tri = self.set_up_triangulation()
         self.tri_actor = None
 
+        self.slow_edge = None
+
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
@@ -86,6 +88,13 @@ class Scene:
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
+        # advance midpoint computation by one step
+        if self.slow_edge is not None:
+            if self.slow_edge.is_done_init_midpoints:
+                self.slow_edge = None
+            else:
+                next(self.slow_edge.midpoints_generator)
+
         # set up
         V, F, coloring = self.tri.get_poly_data()
         self.tri_actor = pv.PolyData(V, F)
@@ -125,6 +134,7 @@ class Scene:
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
             prefer.KEY_EVENT_PICK_NEXT_EDGE: self.path_picker.on_pick_next_edge,
             prefer.KEY_EVENT_PICK_TWIN_EDGE: self.path_picker.on_pick_twin_edge,
+            prefer.KEY_EVENT_RE_RENDER: self.add_intrinsic_triangulation,
         }
         for key, callback in bindings.items():
             self.plotter.add_key_event(key, callback)
@@ -147,13 +157,14 @@ class Scene:
         self.path_shortener.flipout_the_minimal_wedge()
 
     def on_flip_edge(self):
-        e = self.path_picker.get_corresponding_edge()
-        if e is None:
+        old_edge = self.path_picker.get_corresponding_edge()
+        if old_edge is None:
             return
 
         self.path_picker.on_clear()
 
-        self.tri.flip(e)
+        new_edge = self.tri.flip(old_edge)
+        self.slow_edge = new_edge
         self.add_intrinsic_triangulation()
 
     def on_info(self):
