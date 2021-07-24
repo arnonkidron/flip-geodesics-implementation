@@ -2,16 +2,17 @@ from edge import *
 import numpy as np
 from copy import deepcopy
 from utils import turn, is_reflex
-
+import queue
 
 class BaseTriangulation:
     def __init__(self, V):
         self.V = V
-        self.in_edges = [[] for v in range(len(self.V))]
+        self.in_edges = [[] for _ in range(len(self.V))]
+        self.num_f = None
 
     def add_edge(self, e, dst=None):
         if dst is None:
-            dst = e.get_dst()
+            dst = e.dst
         self.in_edges[dst].append(e)
 
     def get_edge(self, origin, dst):
@@ -25,16 +26,72 @@ class BaseTriangulation:
         self.in_edges[u].remove(e.twin)
 
     def remove_edge(self, e):
-        u, v = e.origin, e.get_dst()
+        u, v = e.origin, e.dst
         self.in_edges[v].remove(e)
         self.in_edges[u].remove(e.twin)
 
     def all_edges(self):
         for v in range(len(self.in_edges)):
             for e in self.in_edges[v]:
-                u = e.get_origin()
+                u = e.origin
                 if u < v:
                     yield e
+
+    @staticmethod
+    def edges_in_face(e, visit_index):
+        while not e.was_visited():
+            e.mark_visited(visit_index)
+            yield e
+            e = e.next
+
+    def all_faces(self):
+        # mark unvisited
+        for edge_list in self.in_edges:
+            for e in edge_list:
+                e.mark_unvisited()
+
+        face_index = 0
+        for edge_list in self.in_edges:
+            for e in edge_list:
+                if e.was_visited():
+                    continue
+                yield self.edges_in_face(e, face_index), face_index
+                face_index += 1
+
+    def find_shortest_path(self, src, dst):
+        num_v = len(self.V)
+        d = np.ones(num_v) * np.inf
+        visited = np.zeros(num_v, dtype=bool)
+        parent = [None for _ in range(num_v)]
+
+        d[src] = 0
+
+        q = queue.PriorityQueue(maxsize=num_v)
+        q.put((d[src], src))
+
+        while not q.empty():
+            _, v = q.get()
+            if visited[v]:
+                continue
+            visited[v] = True
+
+            for e in self.in_edges[v]:
+                u = e.origin
+                possible_dist = d[v] + e.length
+                if d[u] > possible_dist:
+                    d[u] = possible_dist
+                    parent[u] = v
+                    q.put((d[u], u))
+
+        path = []
+        v = dst
+        while v != src:
+            path.append(v)
+            v = parent[v]
+            if v is None:
+                return None
+        path.append(src)
+        return self.V[path]
 
 
 class Triangulation(BaseTriangulation):
@@ -43,6 +100,9 @@ class Triangulation(BaseTriangulation):
         self.mesh = ExtrinsicTriangulation(self.V)
         self.insert_mesh_edges(F)
         self.mesh.init_face_angles()
+
+        self.num_f = len(F)
+        self.mesh.num_f = self.num_f
 
     def insert_mesh_edges(self, F):
         """
@@ -82,7 +142,7 @@ class Triangulation(BaseTriangulation):
 
         dir = prev.next.vec
 
-        curr = HalfEdge(twin, prev.get_dst(), f_left, f_right, None)
+        curr = HalfEdge(twin, prev.dst, f_left, f_right, None)
 
         prev.set_next(curr)
         curr.set_next(next)
@@ -99,19 +159,27 @@ class Triangulation(BaseTriangulation):
         return curr
 
     def flip_by(self, origin, dst):
-        return self.flip(self.get_edge(origin, dst))
+        e = self.get_edge(origin, dst)
+        if e is not None:
+            return self.flip(e)
 
     def flip(self, old_edge):
         triangle_1_prev = old_edge.next
-        triangle_1_next = old_edge.twin.next.next
-        triangle_1_angle = old_edge.twin.angle + triangle_1_prev.angle
-
         triangle_2_prev = old_edge.twin.next
-        triangle_2_next = old_edge.next.next
+
+        triangle_1_next = triangle_2_prev.next
+        triangle_2_next = triangle_1_prev.next
+
+        if triangle_2_next.next != old_edge \
+                or triangle_1_next.next != old_edge.twin:
+            old_edge.print("Cannot flip", "due to mis-triangulation")
+            return None
+
+        triangle_1_angle = old_edge.twin.angle + triangle_1_prev.angle
         triangle_2_angle = old_edge.angle + triangle_2_prev.angle
 
         if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
-            old_edge.print("No flip")
+            old_edge.print("Cannot flip", "due to reflex angle")
             return None
 
         self.remove_edge(old_edge)
@@ -119,7 +187,6 @@ class Triangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
-        e.midpoints = []
         e.init_midpoints(self.mesh)
 
         old_edge.print2("Flipped into", e)
@@ -149,6 +216,48 @@ class Triangulation(BaseTriangulation):
             poly_edges.extend(e_E)
 
         return poly_vertices, np.array(poly_edges)
+
+    def get_faces(self):
+        V = deepcopy(self.V)
+        F = []
+        for f, _ in self.all_faces():
+            points = [0]
+            for e in f:
+                points.append(e.origin)
+
+                midpoints = e.get_midpoints()
+                num_midpoints = len(midpoints)
+                if num_midpoints > 0:
+                    V = np.vstack((V, midpoints))
+                    points.extend(list(range(num_midpoints)))
+
+            points[0] = len(points) - 1
+            F.append(points)
+
+        return V, np.hstack(F)
+
+    def get_coloring(self, k):
+        c = np.zeros(self.num_f, dtype=int) - 1
+        for f, f_index in self.all_faces():
+            available = np.ones(k, dtype=bool)
+            for e in f:
+                if not e.twin.was_visited():
+                    continue
+                neighbour_index = e.twin.get_visit_index()
+                neighbour_color = c[neighbour_index]
+                available[neighbour_color] = False
+
+            if not np.any(available):
+                print("Greedy coloring failed")
+                return None
+
+            random_color = np.random.randint(0, k)
+            while not available[random_color]:
+                random_color = np.random.randint(0, k)
+
+            c[f_index] = random_color
+
+        return c
 
     def print(self):
         num_V = len(self.in_edges)
@@ -180,7 +289,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
 
             # set_twin
             if sides[i].twin is not None:
-                e.set_twin(self.get_edge(e.get_dst(), e.get_origin()))
+                e.twin = self.get_edge(e.dst, e.origin)
 
             # add
             self.add_edge(e)

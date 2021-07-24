@@ -4,8 +4,7 @@ from utils import get_angle, get_side_length, rotate, get_closest_point, get_ang
 
 class BaseHalfEdge:
     def __init__(self, twin, origin, vec):
-        self.twin = None
-        self.set_twin(twin)
+        self.twin = twin
 
         self.origin = origin
         self.next = None
@@ -15,30 +14,45 @@ class BaseHalfEdge:
             self.set_vec(vec)
 
         self.a_name = "{}->".format(origin)
+        self.visit_index = None
 
-    def get_origin(self):
-        return self.origin
-
-    def get_dst(self):
+    @property
+    def dst(self):
         return self.next.origin
-
-    def has_endpoint(self, index):
-        return self.origin == index or self.get_dst() == index
-
-    def get_vec(self):
-        return self.vec
 
     def set_vec(self, vec):
         self.vec = vec / np.linalg.norm(vec)
 
     def set_next(self, next):
         self.next = next
-        self.a_name += str(self.get_dst())
+        self.a_name += str(self.dst)
 
-    def set_twin(self, twin):
-        self.twin = twin
+    @property
+    def twin(self):
+        return self._twin
+
+    @twin.setter
+    def twin(self, twin):
+        self._twin = twin
         if twin is not None:
-            twin.twin = self
+            twin._twin = self
+
+    #################
+    #   traversal
+    #################
+    UNVISITED = -1
+
+    def mark_unvisited(self):
+        self.visit_index = self.UNVISITED
+
+    def was_visited(self):
+        return self.visit_index != self.UNVISITED
+
+    def mark_visited(self, visit_index):
+        self.visit_index = visit_index
+
+    def get_visit_index(self):
+        return self.visit_index
 
 
 class HalfEdge(BaseHalfEdge):
@@ -79,9 +93,6 @@ class HalfEdge(BaseHalfEdge):
     def to_extrinsic(self):
         return ExtrinsicHalfEdge(None, self.origin, self.vec)
 
-    def get_angle(self):
-        return self.angle
-
     # auxiliary methods for init_midpoints
     def get_initial_target_edge(self, mesh):
         f = self.mesh_face_left
@@ -115,12 +126,16 @@ class HalfEdge(BaseHalfEdge):
         self.mesh_face_right = f
         self.twin.mesh_face_left = f
 
-        self.vec = mesh.get_edge(self.origin, self.get_dst()).vec
+        self.vec = mesh.get_edge(self.origin, self.dst).vec
         self.twin.vec = -self.vec
 
     def init_midpoints(self, mesh):
+        if self.midpoints is not None \
+                or self.twin.midpoints is not None:
+            return
+
         self.midpoints = []
-        dst = self.get_dst()
+        dst = self.dst
         if dst in self.mesh_face_left:
             self.restore_mesh_edge(mesh)
             return
@@ -158,7 +173,7 @@ class HalfEdge(BaseHalfEdge):
 
         verts = [self.origin] \
             + midpoint_indices \
-            + [self.get_dst()]
+            + [self.dst]
 
         return midpoints, [[verts[i], verts[i + 1]] for i in range(len(verts) - 1)]
 
@@ -169,14 +184,6 @@ class HalfEdge(BaseHalfEdge):
                 self.twin.length = length
 
     def get_length(self):
-        if self.length is None:
-            # uninitialized.
-            # we may assume that the two other sides are initialized,
-            # because edge flips add only one new edge.
-            a = self.next
-            b = a.next
-            self.length = get_side_length(a.length, b.length, b.angle)
-
         return self.length
 
     def calc_angles(self):
@@ -191,8 +198,8 @@ class HalfEdge(BaseHalfEdge):
         self.angle = get_angle(prev_len, self_len, next_len)
         next.angle = get_angle(self_len, next_len, prev_len)
 
-    def print(self, prefix=""):
-        print(prefix, self.a_name)
+    def print(self, prefix="", suffix=""):
+        print(prefix, self.a_name, suffix)
 
     def print2(self, middle, other):
         print(self.a_name, middle, other.a_name)

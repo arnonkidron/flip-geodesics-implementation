@@ -6,10 +6,8 @@ import numpy as np
 class Solver:
     def __init__(self, V, F):
         self.net = FlipEdgeNetwork()
-        self.tri = Triangulation(F)
+        self.tri = Triangulation(V, F)
         self.V = V
-        self.F = F # probably will not be used
-
 
     def get_path_polyline(self):
         path_vertices = np.array(
