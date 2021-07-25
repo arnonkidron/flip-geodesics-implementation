@@ -90,10 +90,17 @@ class Scene:
     def add_intrinsic_triangulation(self):
         # advance midpoint computation by one step
         if self.slow_edge is not None:
+            self.plotter.remove_actor('hit_edge')
+            self.plotter.remove_actor('hit_point')
+
             if self.slow_edge.is_done_init_midpoints:
                 self.slow_edge = None
             else:
-                next(self.slow_edge.midpoints_generator)
+                hit_edge, midpoint = next(self.slow_edge.midpoints_generator)
+
+                actor = pv.PolyData([self.mesh_actor.points[hit_edge.origin], self.mesh_actor.points[hit_edge.dst]], [2,0,1])
+                self.plotter.add_mesh(actor, name='hit_edge', color='Red', style='wireframe', edge_color='Red', render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
+                self.plotter.add_mesh(pv.PolyData(midpoint), name='hit_point', color='Red', render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
 
         # set up
         V, F, coloring = self.tri.get_poly_data()
@@ -200,7 +207,7 @@ class Scene:
 
 
 if __name__ == '__main__':
-    # scene = Scene('C:/Users/Arnon/Desktop/cup3.obj')
-    scene = Scene()
+    scene = Scene('C:/Users/Arnon/Desktop/block.obj')
+    # scene = Scene()
     scene.show()
 

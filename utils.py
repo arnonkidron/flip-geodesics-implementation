@@ -24,11 +24,35 @@ def get_side_length(a, b, angle):
 
 
 def get_angle_between(vec1, vec2):
-    return acos(np.dot(vec1, vec2))
+    dot_product = np.dot(vec1, vec2)
+    if dot_product > 1:
+        dot_product = 1
+    return acos(dot_product)
 
 
 def is_reflex(angle):
     return angle >= pi - 1e-09
+
+
+def orientation(p1, p2, p3):
+    return np.dot(p2 - p1, p3 - p1) > 0
+
+
+def is_orientation_counterclockwise(p1, p2, p3, n):
+    """
+    Input: 3 points that lie on some mesh face
+           a normal to that mesh face, pointing outwards
+    Output: whether the 3 points are oriented counter-clockwise
+    Reference: https://math.stackexchange.com/questions/2386810/orientation-of-three-points-in-3d-space
+    """
+    a = p2 - p1
+    b = p3 - p1
+    a /= np.linalg.norm(a)
+    b /= np.linalg.norm(b)
+    n /= np.linalg.norm(n)
+    cross_product = np.cross(a, b)
+    val = np.dot(n, cross_product)
+    return val > 0
 
 
 #################################

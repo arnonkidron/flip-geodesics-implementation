@@ -12,7 +12,8 @@ class PathPicker:
         self.show_path = True
         self.show_endpoints = True
         self.show_midpoints = True
-        self.allow_pick_intersection_points_of_mesh_and_triangulation = False
+        self.allow_pick_intersection_points_of_mesh_and_triangulation = True
+        self.intersection_points_color = 'Red'
 
         self.kwargs = kwargs
         self.kwargs.setdefault('color', prefer.PICKED_PATH_COLOR)
@@ -20,6 +21,7 @@ class PathPicker:
         self.kwargs.setdefault('line_width', prefer.PICKED_PATH_WIDTH)
 
         self.kwargs.setdefault('render_points_as_spheres', True)
+        self.kwargs.setdefault('render_lines_as_tubes', True)
         self.kwargs.setdefault('pickable', False)
         self.kwargs.setdefault('reset_camera', False)
         self.path_name = '_picked_path'
@@ -132,7 +134,10 @@ class PathPicker:
     def add_actor(self):
         if self.show_path:
             self.remove_actor()
-            self.scene.plotter.add_mesh(self.path_actor, **self.kwargs, name=self.path_name)
+            kwargs = self.kwargs.copy()
+            if len(self.indices) == 1 and self.is_intersection_point(self.last_index):
+                    kwargs['color'] = self.intersection_points_color
+            self.scene.plotter.add_mesh(self.path_actor, **kwargs, name=self.path_name)
 
     def remove_actor(self):
         self.scene.plotter.remove_actor(self.path_name)

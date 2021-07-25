@@ -225,6 +225,7 @@ class Triangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
+        e.is_done_init_midpoints = False
         e.midpoints_generator = e.init_midpoints(self.mesh)
 
         old_edge.print2("Flipped into", e)
@@ -251,8 +252,7 @@ class Triangulation(BaseTriangulation):
                 points.append(e.origin)
 
                 midpoints = e.get_midpoints()
-                num_midpoints = len(midpoints)
-                if num_midpoints > 0:
+                if midpoints is not None and len(midpoints) > 0:
                     index_begin = len(V)
                     V = np.vstack((V, midpoints))
                     index_end = len(V)

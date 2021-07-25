@@ -1,5 +1,5 @@
 import numpy as np
-from utils import get_angle, get_side_length, rotate, turn, get_closest_point, get_angle_between
+from utils import get_angle, get_side_length, rotate, turn, get_closest_point, get_angle_between, is_orientation_counterclockwise, orientation
 from math import degrees, isclose
 
 
@@ -78,7 +78,7 @@ class HalfEdge(BaseHalfEdge):
         self.near_mesh_edge = None
         self.angle_from_near_mesh_edge = None
 
-        self.is_done_init_midpoints = None
+        self.is_done_init_midpoints = True
         self.midpoints_generator = None
 
     @staticmethod
@@ -118,7 +118,10 @@ class HalfEdge(BaseHalfEdge):
             next_mesh_edge = self.near_mesh_edge.twin.next
 
         if isclose(self.angle_from_near_mesh_edge, next_mesh_edge.angle):
-            self.near_mesh_edge = next_mesh_edge
+            self.sit_on_mesh_edge(next_mesh_edge)
+
+    def sit_on_mesh_edge(self, mesh_edge):
+            self.near_mesh_edge = mesh_edge
             self.angle_from_near_mesh_edge = 0
 
     def get_vec_by_near_mesh_edge(self):
@@ -131,20 +134,39 @@ class HalfEdge(BaseHalfEdge):
 
     # auxiliary methods for init_midpoints
     def get_initial_target_edge(self, mesh):
-        f = self.mesh_face_left
-        i = np.nonzero(f == self.origin)[0][0]
-        return mesh.get_edge(f[(i+1) % 3], f[(i+2) % 3])
+        return self.near_mesh_edge.twin.next.next
+        # f = self.mesh_face_left
+        # i = np.nonzero(f == self.origin)[0][0]
+        # return mesh.get_edge(f[(i+1) % 3], f[(i+2) % 3])
 
     @staticmethod
-    def get_next_target_edge(prev_midpoint, vec, e):
+    def get_next_target_edge(prev_midpoint, vec, e, mesh):
         e1 = e.next
         e2 = e1.next
         opposite_vertex = e2.origin
+        n = e.get_face_normal()
 
-        segment = opposite_vertex - prev_midpoint
-        segment /= np.linalg.norm(segment)
-        angle = get_angle_between(segment, vec)
-        if angle < 0:
+        opposite_vertex = mesh.V[opposite_vertex]
+        e1_origin = mesh.V[e1.origin]
+
+        orientation_with_e1 = is_orientation_counterclockwise(e1_origin, prev_midpoint, opposite_vertex, n)
+        orientation_with_vec = is_orientation_counterclockwise(e1_origin, prev_midpoint, prev_midpoint + vec, n)
+
+        if orientation_with_e1 != orientation_with_vec:
+            return e1
+        else:
+            return e2
+
+
+        n = e.get_face_normal()
+        orientation_e = is_orientation_counterclockwise(opposite_vertex - e1.vec, opposite_vertex, opposite_vertex + e2.vec, n)
+        orientation_e2 = is_orientation_counterclockwise(opposite_vertex + e2.vec, opposite_vertex, opposite_vertex - e1.vec, n)
+        if orientation_e == orientation_e2:
+            print("totally wrong!")
+
+        orientation_v = is_orientation_counterclockwise(opposite_vertex, prev_midpoint, prev_midpoint + vec, n)
+
+        if orientation_e == orientation_v:
             return e1
         else:
             return e2
@@ -154,6 +176,8 @@ class HalfEdge(BaseHalfEdge):
         A method to be called when mesh edges are created by edge flips.
         We replace its data with the exact data from the mesh.
         """
+        print("Shouldn't have gotten here!")
+
         f = self.next.mesh_face_left
         self.mesh_face_left = f
         self.twin.mesh_face_right = f
@@ -174,9 +198,9 @@ class HalfEdge(BaseHalfEdge):
         self.midpoints = []
         dst = self.dst
         if dst in self.mesh_face_left:
-            self.restore_mesh_edge(mesh)
-            print("Solved by restore")
-            return
+            print("Oh!")
+            self.sit_on_mesh_edge("If anyone gets here, that's fine, but we'd need to code that")
+            return self.near_mesh_edge
 
         self.is_done_init_midpoints = False
 
@@ -187,8 +211,14 @@ class HalfEdge(BaseHalfEdge):
 
         while len(self.midpoints) < 200:
             midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
+            if midpoint is None:
+                e = e.next
+                midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
+                if midpoint is None:
+                    print("Midpoint calculation has failed")
+                    return
             self.midpoints.append(midpoint)
-            yield
+            yield e, midpoint
 
             e = e.twin
             if e.is_point_in_face(dst):
@@ -196,9 +226,10 @@ class HalfEdge(BaseHalfEdge):
 
             prev_midpoint = midpoint
             vec = rotate(vec, e.mesh_face_angle, e.vec)
-            e = self.get_next_target_edge(prev_midpoint, vec, e)
+            e = e.next
 
         self.is_done_init_midpoints = True
+        yield e, midpoint
 
     def get_midpoints(self):
         if self.midpoints is None and self.twin.midpoints is not None:
@@ -249,18 +280,24 @@ class HalfEdge(BaseHalfEdge):
 
     def get_info(self):
 
-        n_mid = len(self.midpoints)
+        n_mid = 0 if self.midpoints is None else len(self.midpoints)
         if self.is_done_init_midpoints:
             midpoint_report = "Done with {} midpoints\n".format(n_mid)
         else:
             midpoint_report = "Ongoing with {} midpoints\n".format(n_mid)
 
+        if self.angle_from_near_mesh_edge == 0:
+            mesh_msg = "Angle between faces {:.3f} rad ≈ {:.1f}°\n"\
+                .format(self.near_mesh_edge.mesh_face_angle, degrees(self.near_mesh_edge.mesh_face_angle))
+        else:
+            mesh_msg = ""
+
         return "Edge {}->{}\n" \
                "Length {:.4f}\n" \
-               "Left_Angle {:.3f} radians ≈ {:.1f}°\n" \
+               "Left_Angle {:.3f} rad ≈ {:.1f}°\n" \
                "Start_Vec ({:.4f},{:.4f},{:.4f})\n" \
                "Near Mesh Edge {}->{}\n" \
-               "Angle_from_it {:.3f} radians ≈ {:.1f}°\n" \
+               "Angle_from_it {:.3f} rad ≈ {:.1f}°\n" \
                "Mesh_face_left: [{},{},{}]\n" \
                "Mesh_face_right: [{},{},{}]\n" \
             .format(self.origin, self.dst,
@@ -271,7 +308,7 @@ class HalfEdge(BaseHalfEdge):
                     self.angle_from_near_mesh_edge, degrees(self.angle_from_near_mesh_edge),
                     self.mesh_face_left[0], self.mesh_face_left[1], self.mesh_face_left[2],
                     self.mesh_face_right[0], self.mesh_face_right[1], self.mesh_face_right[2]
-                    ) + midpoint_report
+                    ) + midpoint_report + mesh_msg
 
 
 class ExtrinsicHalfEdge(BaseHalfEdge):
@@ -284,6 +321,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         if self.face_normal is None:
             # we may assume all vecs are normalized, because set_vec takes care of that
             n = np.cross(self.vec, self.next.vec)
+            n /= np.linalg.norm(n)
 
             self.face_normal = n
             self.next.face_normal = n
@@ -303,7 +341,20 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
 
     def get_intersection(self, V, line_start, line_vec):
         self_start = V[self.origin]
-        return get_closest_point(self_start, self.vec, line_start, line_vec)
+        intersection = get_closest_point(self_start, self.vec, line_start, line_vec)
+
+        # make sure that it is within the line segment
+        self_end = V[self.dst]
+        unnormalized_vec = self_end - self_start
+        diff = intersection - self_start
+        for i in range(3):
+            if isclose(unnormalized_vec[i], 0):
+                continue
+            t = diff[i] / unnormalized_vec[i]
+            if not(0 <= t <= 1):
+                return None
+
+        return intersection
 
     def is_point_in_face(self, point, counter=0):
         if counter == 3:
