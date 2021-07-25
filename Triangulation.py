@@ -146,7 +146,7 @@ class Triangulation(BaseTriangulation):
 
                 length = np.linalg.norm(self.V[dst] - self.V[origin])
                 twin = self.get_edge(dst, origin)
-                e = HalfEdge.construct(twin, origin, length)
+                e = HalfEdge(twin, origin, length)
                 sides.append(e)
                 self.add_edge(e, dst)
 
@@ -177,14 +177,23 @@ class Triangulation(BaseTriangulation):
 
         self.add_edge(curr)
 
+        # stuff for rendering
+        curr.intersections = None
         self.set_coloring_new_triangle(curr, next, prev)
 
         return curr
 
     def flip_by(self, origin, dst):
         e = self.get_edge(origin, dst)
-        if e is not None:
-            return self.flip(e)
+
+        if e is None:
+            msg = "Edge {}->{}, " \
+                  "does not exist"\
+                .format(origin, dst)
+            print(msg)
+            return msg
+
+        return self.flip(e)
 
     def flip(self, old_edge):
         triangle_1_prev = old_edge.next
@@ -195,23 +204,26 @@ class Triangulation(BaseTriangulation):
 
         if triangle_2_next.next != old_edge \
                 or triangle_1_next.next != old_edge.twin:
-            old_edge.print("Cannot flip", "due to mis-triangulation")
-            return None
+            msg = "Cannot flip edge {}->{}, " \
+                  "because on of its incident faces is not a triangle"\
+                .format(old_edge.origin, old_edge.dst)
+            print(msg)
+            return msg
 
         triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
         triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle
 
         if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
-            old_edge.print("Cannot flip", "due to reflex angle")
-            return None
+            msg = "Cannot flip edge {}->{}, " \
+                  "due to a reflex angle"\
+                .format(old_edge.origin, old_edge.dst)
+            print(msg)
+            return msg
 
         self.remove_edge(old_edge)
 
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
-
-        e.is_done_init_midpoints = False
-        e.midpoints_generator = e.init_midpoints(self.mesh)
 
         old_edge.print2("Flipped into", e)
         return e
@@ -236,10 +248,10 @@ class Triangulation(BaseTriangulation):
             for e in f:
                 points.append(e.origin)
 
-                midpoints = e.get_midpoints()
-                if midpoints is not None and len(midpoints) > 0:
+                intersections = e.get_intersections()
+                if intersections is not None and len(intersections) > 0:
                     index_begin = len(V)
-                    V = np.vstack((V, midpoints))
+                    V = np.vstack((V, intersections))
                     index_end = len(V)
                     points.extend(list(range(index_begin, index_end)))
 

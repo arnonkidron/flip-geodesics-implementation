@@ -9,11 +9,6 @@ class PathPicker:
         self.whole_path_indices = []
 
         self.scene = scene
-        self.show_path = True
-        self.show_endpoints = True
-        self.show_midpoints = True
-        self.allow_pick_intersection_points_of_mesh_and_triangulation = True
-        self.intersection_points_color = 'Red'
 
         self.kwargs = kwargs
         self.kwargs.setdefault('color', prefer.PICKED_PATH_COLOR)
@@ -79,12 +74,12 @@ class PathPicker:
 
     def on_pick(self, input_point):
         point_finder = self.scene.mesh_actor
-        if self.allow_pick_intersection_points_of_mesh_and_triangulation:
+        if prefer.ALLOW_PICK_INTERSECTION_POINTS:
             point_finder = self.scene.tri_actor
         idx = point_finder.find_closest_point(input_point)
         point = point_finder.points[idx]
 
-        if self.allow_pick_intersection_points_of_mesh_and_triangulation:
+        if prefer.ALLOW_PICK_INTERSECTION_POINTS:
             # if the current or the last point is such,
             # then clear the path before moving on
             if self.is_intersection_point(idx) \
@@ -124,20 +119,22 @@ class PathPicker:
         self.path_actor += poly_data
 
     def update_path_vertices(self, current_point):
-        if self.show_midpoints:
+        if prefer.SHOW_PICKED_PATH_ALL_POINTS:
             self.path_actor += pv.PolyData(current_point)
-        elif self.show_endpoints:
+        elif prefer.SHOW_PICKED_PATH_END_POINTS:
             self.path_actor.points[0] = current_point
         elif len(self.indices) == 2:
             self.path_actor = pv.PolyData()
 
     def add_actor(self):
-        if self.show_path:
-            self.remove_actor()
-            kwargs = self.kwargs.copy()
-            if len(self.indices) == 1 and self.is_intersection_point(self.last_index):
-                    kwargs['color'] = self.intersection_points_color
-            self.scene.plotter.add_mesh(self.path_actor, **kwargs, name=self.path_name)
+        self.remove_actor()
+        if not prefer.SHOW_PICKED_PATH:
+            return
+
+        kwargs = self.kwargs.copy()
+        if len(self.indices) == 1 and self.is_intersection_point(self.last_index):
+                kwargs['color'] = prefer.PICKED_INTERSECTION_POINTS_COLOR
+        self.scene.plotter.add_mesh(self.path_actor, **kwargs, name=self.path_name)
 
     def remove_actor(self):
         self.scene.plotter.remove_actor(self.path_name)
@@ -164,12 +161,12 @@ class PathPicker:
 
     def reconstruct_by_indices(self):
         self.path_actor = pv.PolyData()
-        if self.show_endpoints or len(self.indices) == 1:
+        if prefer.SHOW_PICKED_PATH_END_POINTS or len(self.indices) == 1:
             self.init_path_vertices()
 
         for i in range(len(self.indices) - 1):
             self.update_path_edges(self.indices[i], self.indices[i + 1])
-            if self.show_midpoints:
+            if prefer.SHOW_PICKED_PATH_ALL_POINTS:
                 current_point = self.scene.tri_actor.points[self.indices[i]]
                 self.path_actor += pv.PolyData(current_point)
 

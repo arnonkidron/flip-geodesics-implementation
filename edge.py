@@ -68,25 +68,13 @@ class HalfEdge(BaseHalfEdge):
         self.near_mesh_edge = None
         self.angle_from_near_mesh_edge = None
 
-        self.midpoints = None
-        self.is_done_init_midpoints = True
-        self.midpoints_generator = None
-
-    @staticmethod
-    def construct(twin, origin, length):
-        """
-        a constructor for half-edges that lie on mesh edges
-        """
-        obj = HalfEdge(twin, origin, length)
-
-        obj.midpoints = []
-
-        return obj
+        # assume the edge lies on a mesh edge, hence it has no intersection points with other mesh edges
+        self.intersections = []
+        self.intersections_generator = None
 
     def to_extrinsic(self, V):
-        ex_half_edge = ExtrinsicHalfEdge(None, self.origin)
+        ex_half_edge = ExtrinsicHalfEdge(None, self.origin, V[self.origin], V[self.dst])
         ex_half_edge.corner_angle = self.corner_angle
-        ex_half_edge.vec = V[self.dst] - V[self.origin]
 
         self.sit_on_mesh_edge(ex_half_edge)
 
@@ -112,7 +100,10 @@ class HalfEdge(BaseHalfEdge):
             self.near_mesh_edge = mesh_edge
             self.angle_from_near_mesh_edge = 0
 
-    def get_vec_by_near_mesh_edge(self):
+    ###############
+    # computing the edge's intersection
+    ###############
+    def get_first_segment_vector(self):
         next_mesh_edge = self.near_mesh_edge.twin.next
         return turn(
             self.near_mesh_edge.vec,
@@ -120,72 +111,73 @@ class HalfEdge(BaseHalfEdge):
             towards=next_mesh_edge.vec
         )
 
-    # auxiliary methods for init_midpoints
-    def get_initial_target_edge(self):
+    def get_first_intersecting_mesh_edge(self):
         return self.near_mesh_edge.twin.next.next
 
-    def init_midpoints(self, mesh):
-        self.is_done_init_midpoints = True
-        if self.midpoints is not None \
-                or self.twin.midpoints is not None:
-            return
+    def init_intersections(self):
+        for _ in self.init_intersections_one_at_a_time():
+            pass
 
-        self.midpoints = []
+    def init_intersections_one_at_a_time(self):
+        if self.intersections is not None \
+                or self.twin.intersections is not None:
+            yield None, None, None; return
+
+        self.intersections = []
         dst = self.dst
 
-        self.is_done_init_midpoints = False
+        if self.near_mesh_edge.is_point_in_face(dst):
+            print("Superfluous")
+            self.sit_on_mesh_edge(self.near_mesh_edge)
+            yield None, None, None; return
 
         # initial values
-        prev_midpoint = mesh.V[self.origin]
-        vec = self.get_vec_by_near_mesh_edge()
-        e = self.get_initial_target_edge()
+        prev_intersection = self.near_mesh_edge.origin_coords
+        vec = self.get_first_segment_vector()
+        e = self.get_first_intersecting_mesh_edge()
 
-        if e.is_point_in_face(dst):
-            print("Oh!")
-            self.sit_on_mesh_edge("If anyone gets here, that's fine, but we'd need to code that")
-            return self.near_mesh_edge
-
-        while len(self.midpoints) < 200:
-            midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
-            if midpoint is None:
+        while len(self.intersections) < 200:
+            # try both edges
+            intersection = e.get_intersection(prev_intersection, vec)
+            if intersection is None:
                 e = e.next
-                midpoint = e.get_intersection(mesh.V, prev_midpoint, vec)
-                if midpoint is None:
+                intersection = e.get_intersection(prev_intersection, vec)
+                if intersection is None:
                     print("Midpoint calculation has failed")
+                    yield None, None
                     return
-            self.midpoints.append(midpoint)
-            yield e, midpoint
+            self.intersections.append(intersection)
+            yield intersection, e, self
 
             e = e.twin
             if e.is_point_in_face(dst):
                 break
 
-            prev_midpoint = midpoint
+            prev_intersection = intersection
             vec = rotate(vec, e.mesh_face_angle, e.vec)
             e = e.next
 
-        self.is_done_init_midpoints = True
-        yield e, midpoint
+        yield None, None, None; return
 
-    def get_midpoints(self):
-        if self.midpoints is None and self.twin.midpoints is not None:
-            return np.flipud(self.twin.get_midpoints())
+    def get_intersections(self):
+        if self.intersections is None and self.twin.intersections is not None:
+            return np.flipud(self.twin.get_intersections())
 
-        return self.midpoints
+        return self.intersections
 
     def get_polyline(self, index_difference=0):
-        midpoints = self.get_midpoints()
+        intersections = self.get_intersections()
 
-        midpoint_indices = list(range(
+        intersection_indices = list(range(
             index_difference,
-            len(midpoints) + index_difference
+            len(intersections) + index_difference
         ))
 
         verts = [self.origin] \
-            + midpoint_indices \
+            + intersection_indices \
             + [self.dst]
 
-        return midpoints, [[verts[i], verts[i + 1]] for i in range(len(verts) - 1)]
+        return intersections, [[verts[i], verts[i + 1]] for i in range(len(verts) - 1)]
 
     def set_length(self, length):
         if self.length is None:
@@ -215,12 +207,11 @@ class HalfEdge(BaseHalfEdge):
         print(self.a_name, middle, other.a_name)
 
     def get_info(self):
-
-        n_mid = 0 if self.midpoints is None else len(self.midpoints)
-        if self.is_done_init_midpoints:
-            midpoint_report = "Done with {} midpoints\n".format(n_mid)
+        if self.angle_from_near_mesh_edge != 0:
+            n_mid = 0 if self.intersections is None else len(self.intersections)
+            intersection_report = "Has {} intersections\n".format(n_mid)
         else:
-            midpoint_report = "Ongoing with {} midpoints\n".format(n_mid)
+            intersection_report = ""
 
         if self.angle_from_near_mesh_edge == 0:
             mesh_msg = "Angle between faces {:.3f} rad ≈ {:.1f}°\n"\
@@ -238,15 +229,16 @@ class HalfEdge(BaseHalfEdge):
                     self.corner_angle, degrees(self.corner_angle),
                     self.near_mesh_edge.origin, self.near_mesh_edge.dst,
                     self.angle_from_near_mesh_edge, degrees(self.angle_from_near_mesh_edge),
-                    ) + midpoint_report + mesh_msg
+                    ) + intersection_report + mesh_msg
 
 
 class ExtrinsicHalfEdge(BaseHalfEdge):
-    def __init__(self, twin, origin):
+    def __init__(self, twin, origin, origin_coords, dst_coords):
         super().__init__(twin, origin)
+        self.origin_coords = origin_coords
+        self.vec = dst_coords - origin_coords
         self.face_normal = None
         self.mesh_face_angle = None
-        self.vec = None
 
     def get_face_normal(self):
         if self.face_normal is None:
@@ -268,12 +260,11 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         self.mesh_face_angle = angle
         self.twin.mesh_face_angle = angle
 
-    def get_intersection(self, V, line_start, line_vec):
-        self_start = V[self.origin]
-        intersection = get_closest_point(self_start, self.vec, line_start, line_vec)
+    def get_intersection(self, line_start, line_vec):
+        intersection = get_closest_point(self.origin_coords, self.vec, line_start, line_vec)
 
         # make sure that it is within the line segment
-        diff = intersection - self_start
+        diff = intersection - self.origin_coords
         for i in range(3):
             if isclose(self.vec[i], 0):
                 continue

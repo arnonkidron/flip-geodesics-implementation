@@ -1,6 +1,6 @@
 import pyvista as pv
 import numpy as np
-from tkinter import *
+from tkinter import Tk, messagebox
 from tkinter.filedialog import askopenfilename
 from FlipEdgeNetwork import *
 from Triangulation import *
@@ -21,7 +21,7 @@ class Scene:
         self.tri = self.set_up_triangulation()
         self.tri_actor = None
 
-        self.slow_edge = None
+        self.slow_generator = None
 
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
@@ -48,6 +48,15 @@ class Scene:
             exit("flip_geodesic load error: No file chosen")
 
         return mesh_url
+
+    @staticmethod
+    def warn(title, msg):
+        """
+        Outcome: display the message in a tkinter window, with retry & cancel
+        Output: whether the user has chosen to retry
+        """
+        Tk().withdraw()
+        return messagebox.showwarning(title=title, message=msg, type=messagebox.OK)
 
     def show(self):
         self.plotter.show()
@@ -88,19 +97,21 @@ class Scene:
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
-        # advance midpoint computation by one step
-        if self.slow_edge is not None:
+        # advance intersection point computation by one step
+        if self.slow_generator is not None:
+            self.plotter.remove_actor('slow_edge')
             self.plotter.remove_actor('hit_edge')
             self.plotter.remove_actor('hit_point')
 
-            if self.slow_edge.is_done_init_midpoints:
-                self.slow_edge = None
+            point, mesh_edge, tri_edge = next(self.slow_generator)
+            if point is None:
+                self.slow_generator = None
             else:
-                hit_edge, midpoint = next(self.slow_edge.midpoints_generator)
-
-                actor = pv.PolyData([self.mesh_actor.points[hit_edge.origin], self.mesh_actor.points[hit_edge.dst]], [2,0,1])
-                self.plotter.add_mesh(actor, name='hit_edge', color='Red', style='wireframe', edge_color='Red', render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
-                self.plotter.add_mesh(pv.PolyData(midpoint), name='hit_point', color='Red', render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
+                actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0,1])
+                self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
+                actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0,1])
+                self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
+                self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
 
         # set up
         V, F, coloring = self.tri.get_poly_data()
@@ -171,7 +182,18 @@ class Scene:
         self.path_picker.on_clear()
 
         new_edge = self.tri.flip(old_edge)
-        self.slow_edge = new_edge
+
+        # check for error
+        if isinstance(new_edge, str):
+            self.warn(title="Edge flip fail", msg=new_edge)
+            return
+
+        # compute intersection points
+        if prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
+            self.slow_generator = new_edge.init_intersections_one_at_a_time()
+        else:
+            new_edge.init_intersections()
+
         self.add_intrinsic_triangulation()
 
     def on_info(self):
