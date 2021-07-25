@@ -27,9 +27,9 @@ class BaseTriangulation:
         e = e1.next
         sum = 0
         while e != e2:
-            sum += e.angle
+            sum += e.corner_angle
             e = e.twin.next
-        sum += e.angle
+        sum += e.corner_angle
 
         return sum
 
@@ -144,9 +144,9 @@ class Triangulation(BaseTriangulation):
                 origin = f[i]
                 dst = f[(i+1) % 3]
 
-                vec = self.V[dst] - self.V[origin]
+                length = np.linalg.norm(self.V[dst] - self.V[origin])
                 twin = self.get_edge(dst, origin)
-                e = HalfEdge.construct(twin, origin, f, vec)
+                e = HalfEdge.construct(twin, origin, length)
                 sides.append(e)
                 self.add_edge(e, dst)
 
@@ -162,37 +162,22 @@ class Triangulation(BaseTriangulation):
             self.mesh.add_triangle(sides)
 
     def construct_triangle_for_flip(self, twin, prev, next, angle):
-        # TODO: go over mesh to compute f_left, f_right correctly
-        f_left = prev.twin.mesh_face_right
-        f_right = prev.next.mesh_face_left
-
-        dir = prev.next.vec
-
-        curr = HalfEdge(twin, prev.dst, f_left, f_right, None)
+        length = get_side_length(next.length, prev.length, angle)
+        curr = HalfEdge(twin, prev.dst, length)
 
         prev.set_next(curr)
         curr.set_next(next)
         next.set_next(prev)
 
-        prev.angle = angle
-        curr.length = get_side_length(next.length, prev.length, prev.angle)
-        curr.angle = get_angle(prev.length, curr.length, next.length)
-        next.angle = get_angle(curr.length, next.length, prev.length)
+        prev.corner_angle = angle
+        curr.corner_angle = get_angle(prev.length, curr.length, next.length)
+        next.corner_angle = get_angle(curr.length, next.length, prev.length)
 
-        # TODO: traverse the mesh edges, and turn it piece by piece
         curr.init_near_mesh_edge()
-
-        # curr.vec = turn(prev.twin.vec, curr.angle, towards=dir)
-        curr.vec = curr.get_vec_by_near_mesh_edge()
 
         self.add_edge(curr)
 
-        if prev.face_color is not None:
-            prev.mark_unvisited()
-            next.mark_unvisited()
-            if twin is None:
-                curr.mark_visited()
-            self.set_coloring(self.edges_in_face(next))
+        self.set_coloring_new_triangle(curr, next, prev)
 
         return curr
 
@@ -213,8 +198,8 @@ class Triangulation(BaseTriangulation):
             old_edge.print("Cannot flip", "due to mis-triangulation")
             return None
 
-        triangle_1_angle = old_edge.twin.angle + triangle_1_prev.angle
-        triangle_2_angle = old_edge.angle + triangle_2_prev.angle
+        triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
+        triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle
 
         if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
             old_edge.print("Cannot flip", "due to reflex angle")
@@ -290,6 +275,14 @@ class Triangulation(BaseTriangulation):
         e.next.face_color = random_color
         e.next.next.face_color = random_color
 
+    def set_coloring_new_triangle(self, new_edge, next, nextnext):
+        if next.face_color is not None:
+            next.mark_unvisited()
+            nextnext.mark_unvisited()
+            if new_edge.twin is None:
+                new_edge.mark_visited()
+            self.set_coloring(self.edges_in_face(next))
+
     def print(self):
         num_V = len(self.in_edges)
         for v in range(num_V):
@@ -321,14 +314,14 @@ class ExtrinsicTriangulation(BaseTriangulation):
         super().__init__(V)
 
     def add_triangle(self, sides):
-        edges = [sides[i].to_extrinsic() for i in range(3)]
+        edges = [sides[i].to_extrinsic(self.V) for i in range(3)]
         for i in range(3):
             e = edges[i]
 
             # set_next
             e.set_next(edges[(i+1) % 3])
 
-            # set_twin
+            # set twin
             if sides[i].twin is not None:
                 e.twin = self.get_edge(e.dst, e.origin)
 
