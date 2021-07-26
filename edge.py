@@ -138,6 +138,7 @@ class HalfEdge(BaseHalfEdge):
 
         while len(self.intersections) < 200:
             # TODO: check if this is the problem, that there exists a good approximation although they don't really intersect
+            # I'll do it when we find it to fail again
             # try both edges
             # intersection1, error1 = e.get_intersection(prev_intersection, vec)
             # intersection2, error2 = e.next.get_intersection(prev_intersection, vec)

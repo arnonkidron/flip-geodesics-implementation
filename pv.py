@@ -16,10 +16,13 @@ class Scene:
         if url is None:
             url = self.ask_for_url()
 
+        self.V = None
+
         self.plotter = pv.Plotter()
         self.mesh_actor = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
-        self.tri_actor = None
+        self.tri_edge_actor = None
+        self.tri_face_actor = None
 
         self.slow_generator = None
 
@@ -89,11 +92,20 @@ class Scene:
 
     def add_extrinsic_mesh_actor(self):
         mesh_kwargs = {
-            'name': 'mesh_edges',
+            'name': 'extrinsic_mesh',
+            'edge_color': prefer.MESH_EDGE_COLOR,
             'color': prefer.MESH_EDGE_COLOR,
             'line_width': prefer.MESH_EDGE_WIDTH,
             'show_edges': prefer.SHOW_MESH_EDGES,
+            'show_scalar_bar': False,
         }
+
+        if prefer.SHOW_TRIANGULATION_FACES:
+            mesh_kwargs['style'] = 'wireframe'
+        else:
+            mesh_kwargs['color'] = prefer.MESH_FACE_COLOR
+
+        self.plotter.remove_actor(mesh_kwargs['name'])
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
     def add_intrinsic_triangulation(self):
@@ -108,9 +120,9 @@ class Scene:
             if point is None:
                 self.slow_generator = None
             else:
-                actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0,1])
+                actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
                 # self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
-                actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0,1])
+                actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
                 self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
 
@@ -120,26 +132,35 @@ class Scene:
                                       line_width=prefer.PICKED_PATH_WIDTH)
 
         # set up
-        V, F, coloring = self.tri.get_poly_data()
-        self.tri_actor = pv.PolyData(V, F)
-        self.tri_actor.cell_arrays['TriagColoring'] = coloring
+        self.V, E, F, coloring = self.tri.get_poly_data()
 
-        tri_kwargs = {
-            'edge_color': prefer.TRIANGULATION_EDGE_COLOR,
+        self.tri_edge_actor = pv.PolyData(self.V, E)
+        self.tri_face_actor = pv.PolyData(self.V, F)
+        self.tri_face_actor.cell_arrays['TriagColoring'] = coloring
+        self.tri_face_actor.set_active_scalars('TriagColoring')
+
+        tri_edge_kwargs = {
+            'name': 'tri_edge',
+            'style': 'wireframe',
+            'color': prefer.TRIANGULATION_EDGE_COLOR,
             'line_width': prefer.TRIANGULATION_EDGE_WIDTH,
-            'show_edges': prefer.SHOW_TRIANGULATION_EDGES,
             'show_scalar_bar': False,
-            'render_points_as_spheres': True,
         }
-        if prefer.SHOW_TRIANGULATION_FACES:
-            tri_kwargs['cmap'] = prefer.TRIANGULATION_FACES_COLOR_MAP
-            self.tri_actor.set_active_scalars('TriagColoring')
-        else:
-            tri_kwargs['color'] = 'Gold'
-            self.tri_actor.set_active_scalars(None)
 
-        self.plotter.remove_actor('tri')
-        self.plotter.add_mesh(self.tri_actor, **tri_kwargs, name='tri')
+        tri_face_kwargs = {
+            'name': 'tri_face',
+            'show_edges': False,
+            'show_scalar_bar': False,
+            'cmap': prefer.TRIANGULATION_FACES_COLOR_MAP,
+        }
+
+        self.plotter.remove_actor(tri_edge_kwargs['name'])
+        self.plotter.remove_actor(tri_face_kwargs['name'])
+        if prefer.SHOW_TRIANGULATION_EDGES:
+            self.plotter.add_mesh(self.tri_edge_actor, **tri_edge_kwargs)
+
+        if prefer.SHOW_TRIANGULATION_FACES:
+            self.plotter.add_mesh(self.tri_face_actor, **tri_face_kwargs)
 
     def set_up_path_picker(self):
         path_picker = PathPicker(self, line_width=prefer.PICKED_PATH_WIDTH, point_size=prefer.PICKED_POINT_SIZE)
@@ -180,10 +201,10 @@ class Scene:
         self.path_shortener.set_path(path)
         tmp = self.path_shortener.flipout_the_minimal_wedge()
 
-        tmp_picker = PathPicker(self, color='Red')
-        tmp_picker.path_name = "_bypass_path"
-        for v in tmp:
-            tmp_picker.on_pick(self.tri.V[v])
+        # tmp_picker = PathPicker(self, color='Red')
+        # tmp_picker.path_name = "_bypass_path"
+        # for v in tmp:
+        #     tmp_picker.on_pick(self.tri.V[v])
 
 
 

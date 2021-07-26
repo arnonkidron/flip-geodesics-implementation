@@ -75,7 +75,7 @@ class PathPicker:
     def on_pick(self, input_point):
         point_finder = self.scene.mesh_actor
         if prefer.ALLOW_PICK_INTERSECTION_POINTS:
-            point_finder = self.scene.tri_actor
+            point_finder = self.scene.tri_edge_actor
         idx = point_finder.find_closest_point(input_point)
         point = point_finder.points[idx]
 
@@ -99,8 +99,8 @@ class PathPicker:
         self.add_actor()
 
     def init_path_vertices(self):
-        last_point = self.scene.tri_actor.points[self.last_index]
-        first_point = self.scene.tri_actor.points[self.indices[0]]
+        last_point = self.scene.V[self.last_index]
+        first_point = self.scene.V[self.indices[0]]
         self.path_actor = pv.PolyData([last_point, first_point])
         self.whole_path_indices = [self.indices[0]]
 

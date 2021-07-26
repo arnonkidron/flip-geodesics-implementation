@@ -241,10 +241,10 @@ class Triangulation(BaseTriangulation):
 
     def get_poly_data(self):
         V = deepcopy(self.V)
-        F = []
+        E = []
         coloring = []
         for f in self.all_faces():
-            points = [0]
+            points = [None]
             for e in f:
                 points.append(e.origin)
 
@@ -255,12 +255,17 @@ class Triangulation(BaseTriangulation):
                     index_end = len(V)
                     points.extend(list(range(index_begin, index_end)))
 
-            coloring.append(e.face_color)
-
             points[0] = len(points) - 1
-            F.append(points)
+            E.append(points)
 
-        return V, np.hstack(F), coloring
+            face_color = e.face_color
+            coloring.append(face_color)
+
+
+
+        E = np.hstack(E)
+
+        return V, E, E, coloring
 
     def init_coloring(self, num_faces, num_colors):
         self.face_coloring = np.zeros(num_faces, dtype=int) - 1
