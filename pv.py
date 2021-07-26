@@ -25,12 +25,13 @@ class Scene:
         self.tri_face_actor = None
 
         self.slow_generator = None
+        self.result_path = PathVisualizer(self)
 
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
         self.path_shortener = PathShortener(self.tri)
-        self.path_picker = self.set_up_path_picker()
+        self.path_picker = PathPicker(self)
         self.text_actor = None
         self.set_up_events()
 
@@ -123,13 +124,13 @@ class Scene:
                 actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
                 # self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
-                self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
-                self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
+                self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
+                self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
 
                 actor = pv.PolyData([point, point + new_vec], [2, 0,1])
                 self.plotter.add_mesh(actor, name='next_vec', style='wireframe',
                                       color='Green', render_lines_as_tubes=True,
-                                      line_width=prefer.PICKED_PATH_WIDTH)
+                                      line_width=prefer.PATH_EDGE_WIDTH)
 
         # set up
         self.V, E, F, coloring = self.tri.get_poly_data()
@@ -162,11 +163,7 @@ class Scene:
         if prefer.SHOW_TRIANGULATION_FACES:
             self.plotter.add_mesh(self.tri_face_actor, **tri_face_kwargs)
 
-    def set_up_path_picker(self):
-        path_picker = PathPicker(self, line_width=prefer.PICKED_PATH_WIDTH, point_size=prefer.PICKED_POINT_SIZE)
-
-        self.path_picker = path_picker
-        return path_picker
+        self.result_path.add_actor()
 
     def set_up_events(self):
         bindings = {
@@ -175,11 +172,12 @@ class Scene:
             prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
             prefer.KEY_EVENT_EDGE_FLIP: self.on_edge_flip,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
-            prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.path_picker.on_clear,
+            prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
             prefer.KEY_EVENT_PICK_NEXT_EDGE: self.path_picker.on_pick_next_edge,
             prefer.KEY_EVENT_PICK_TWIN_EDGE: self.path_picker.on_pick_twin_edge,
             prefer.KEY_EVENT_RE_RENDER: self.add_intrinsic_triangulation,
+            prefer.KEY_EVENT_PICK_RESULT_PATH: self.on_pick_result_path,
         }
         for key, callback in bindings.items():
             self.plotter.add_key_event(key, callback)
@@ -194,26 +192,27 @@ class Scene:
     def on_make_geodesic(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
-        self.path_shortener.make_geodesic()
+        new_path = self.path_shortener.make_geodesic()
+
+        self.result_path.set_path(new_path)
+        if prefer.SHOW_ON_MAKE_GEODESIC == prefer.ONLY_THE_RESULT:
+            self.on_pick_result_path()
 
     def on_flip_out(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
-        tmp = self.path_shortener.flipout_the_minimal_wedge()
+        new_path = self.path_shortener.flipout_the_minimal_wedge()
 
-        # tmp_picker = PathPicker(self, color='Red')
-        # tmp_picker.path_name = "_bypass_path"
-        # for v in tmp:
-        #     tmp_picker.on_pick(self.tri.V[v])
-
-
+        self.result_path.set_path(new_path)
+        if prefer.SHOW_ON_FLIPOUT == prefer.ONLY_THE_RESULT:
+            self.on_pick_result_path()
 
     def on_edge_flip(self):
         old_edge = self.path_picker.get_corresponding_edge()
         if old_edge is None:
             return
 
-        self.path_picker.on_clear()
+        self.path_picker.clear()
 
         new_edge = self.tri.flip(old_edge)
 
@@ -221,6 +220,10 @@ class Scene:
         if isinstance(new_edge, str):
             self.warn(title="Edge flip fail", msg=new_edge)
             return
+
+        self.result_path.set_path_as_one_edge(new_edge)
+        if prefer.SHOW_ON_EDGE_FLIP == prefer.ONLY_THE_RESULT:
+            self.on_pick_result_path()
 
         # compute intersection points
         if prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
@@ -260,6 +263,18 @@ class Scene:
 
     def remove_text(self):
         self.plotter.remove_actor(self.text_actor)
+
+    def on_clear(self):
+        self.path_picker.clear()
+        self.result_path.clear()
+        self.remove_text()
+
+    def on_pick_result_path(self):
+        if self.result_path.is_empty():
+            return
+
+        self.path_picker.set_path(self.result_path.get_path())
+        self.result_path.clear()
 
 
 if __name__ == '__main__':
