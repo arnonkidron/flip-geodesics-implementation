@@ -1,6 +1,6 @@
 import numpy as np
 from utils import get_angle, get_side_length, rotate, turn, get_closest_point, get_angle_between, is_orientation_counterclockwise, orientation
-from math import degrees, isclose
+from math import degrees, isclose, pi
 
 
 class BaseHalfEdge:
@@ -137,27 +137,46 @@ class HalfEdge(BaseHalfEdge):
         e = self.get_first_intersecting_mesh_edge()
 
         while len(self.intersections) < 200:
+            # TODO: check if this is the problem, that there exists a good approximation although they don't really intersect
             # try both edges
+            # intersection1, error1 = e.get_intersection(prev_intersection, vec)
+            # intersection2, error2 = e.next.get_intersection(prev_intersection, vec)
+            # if intersection1 is not None and intersection2 is not None:
+            #     if error1 < error2:
+            #         intersection = intersection1
+            #     else:
+            #         intersection = intersection2
             intersection = e.get_intersection(prev_intersection, vec)
             if intersection is None:
                 e = e.next
                 intersection = e.get_intersection(prev_intersection, vec)
                 if intersection is None:
                     print("Midpoint calculation has failed")
-                    yield None, None
-                    return
+                    yield None, None, None, None; return
             self.intersections.append(intersection)
-            yield intersection, e, self
+            tmp1, tmp2, tmp3 = intersection, e, self
+            # yield tmp
 
             e = e.twin
-            if e.is_point_in_face(dst):
-                break
+            # if e.is_point_in_face(dst):
+            #     yield tmp
+            #     break
 
             prev_intersection = intersection
-            vec = rotate(vec, e.mesh_face_angle, e.vec)
+            vec = rotate(vec, 2 * pi - e.mesh_face_angle, e.vec)
+            # e = e.next
+
+            n = e.get_face_normal()
+            print(np.dot(vec / np.linalg.norm(vec), n))
+
+            if e.is_point_in_face(dst):
+                yield tmp1, tmp2, tmp3, vec
+                break
             e = e.next
 
-        yield None, None, None; return
+            yield tmp1, tmp2, tmp3, vec
+
+        yield None, None, None, None; return
 
     def get_intersections(self):
         if self.intersections is None and self.twin.intersections is not None:

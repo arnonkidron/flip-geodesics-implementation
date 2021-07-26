@@ -102,16 +102,22 @@ class Scene:
             self.plotter.remove_actor('slow_edge')
             self.plotter.remove_actor('hit_edge')
             self.plotter.remove_actor('hit_point')
+            self.plotter.remove_actor('next_vec')
 
-            point, mesh_edge, tri_edge = next(self.slow_generator)
+            point, mesh_edge, tri_edge, new_vec = next(self.slow_generator)
             if point is None:
                 self.slow_generator = None
             else:
                 actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0,1])
-                self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
+                # self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0,1])
                 self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
                 self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PICKED_POINT_SIZE)
+
+                actor = pv.PolyData([point, point + new_vec], [2, 0,1])
+                self.plotter.add_mesh(actor, name='next_vec', style='wireframe',
+                                      color='Green', render_lines_as_tubes=True,
+                                      line_width=prefer.PICKED_PATH_WIDTH)
 
         # set up
         V, F, coloring = self.tri.get_poly_data()
@@ -146,7 +152,7 @@ class Scene:
             prefer.KEY_EVENT_SINGLE_SOURCE_DIJKSTRA: self.on_single_source,
             prefer.KEY_EVENT_MAKE_GEODESIC: self.on_make_geodesic,
             prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
-            prefer.KEY_EVENT_EDGE_FLIP: self.on_flip_edge,
+            prefer.KEY_EVENT_EDGE_FLIP: self.on_edge_flip,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.path_picker.on_clear,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
@@ -172,9 +178,16 @@ class Scene:
     def on_flip_out(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
-        self.path_shortener.flipout_the_minimal_wedge()
+        tmp = self.path_shortener.flipout_the_minimal_wedge()
 
-    def on_flip_edge(self):
+        tmp_picker = PathPicker(self, color='Red')
+        tmp_picker.path_name = "_bypass_path"
+        for v in tmp:
+            tmp_picker.on_pick(self.tri.V[v])
+
+
+
+    def on_edge_flip(self):
         old_edge = self.path_picker.get_corresponding_edge()
         if old_edge is None:
             return
@@ -229,7 +242,7 @@ class Scene:
 
 
 if __name__ == '__main__':
-    scene = Scene('C:/Users/Arnon/Desktop/block.obj')
+    scene = Scene()
     # scene = Scene()
     scene.show()
 
