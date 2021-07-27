@@ -26,6 +26,8 @@ class PathVisualizer:
         self.show_path_all_points = prefer.SHOW_RESULT_PATH_ALL_POINTS
 
     def is_empty(self):
+        if self.indices is None:
+            return False
         return len(self.indices) == 0
 
     @property
@@ -88,6 +90,9 @@ class PathVisualizer:
             self.path_actor = pv.PolyData()
 
     def reconstruct_by_indices(self):
+        if self.is_empty():
+            return
+
         self.path_actor = pv.PolyData()
         if self.show_path_end_points or len(self.indices) == 1:
             self.init_path_vertices()

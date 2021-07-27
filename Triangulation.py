@@ -187,11 +187,7 @@ class Triangulation(BaseTriangulation):
         e = self.get_edge(origin, dst)
 
         if e is None:
-            msg = "Edge {}->{}, " \
-                  "does not exist"\
-                .format(origin, dst)
-            print(msg)
-            return msg
+            raise self.NonExistentEdgeException(e)
 
         return self.flip(e)
 
@@ -204,21 +200,13 @@ class Triangulation(BaseTriangulation):
 
         if triangle_2_next.next != old_edge \
                 or triangle_1_next.next != old_edge.twin:
-            msg = "Cannot flip edge {}->{}, " \
-                  "because on of its incident faces is not a triangle"\
-                .format(old_edge.origin, old_edge.dst)
-            print(msg)
-            return msg
+            raise self.MistriangulationException(old_edge)
 
         triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
         triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle
 
         if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
-            msg = "Cannot flip edge {}->{}, " \
-                  "due to a reflex angle"\
-                .format(old_edge.origin, old_edge.dst)
-            print(msg)
-            return msg
+            raise self.ReflexAngleException(old_edge)
 
         self.remove_edge(old_edge)
 
@@ -322,6 +310,32 @@ class Triangulation(BaseTriangulation):
                "({:.4f},{:.4f},{:.4f})\n" \
                "Degree {}\n"\
             .format(idx, coords[0], coords[1], coords[2], deg)
+
+    class TriangulationException(BaseException):
+        pass
+
+    class NonExistentEdgeException(TriangulationException):
+        def __init__(self, e):
+            msg = "Edge {}->{}, " \
+                  "does not exist"\
+                .format(e.origin, e.dst)
+            super().__init__(msg)
+
+    class MistriangulationException(TriangulationException):
+        def __init__(self, e):
+            msg = "Cannot flip edge {}->{}, " \
+                  "because on of its incident faces is not a triangle" \
+                .format(e.origin, e.dst)
+            super().__init__(msg)
+
+    class ReflexAngleException(TriangulationException):
+        def __init__(self, e):
+            msg = "Cannot flip edge {}->{}, " \
+                  "due to a reflex angle" \
+                .format(e.origin, e.dst)
+            super().__init__(msg)
+
+
 
 
 

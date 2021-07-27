@@ -112,7 +112,15 @@ class HalfEdge(BaseHalfEdge):
         )
 
     def get_first_intersecting_mesh_edge(self):
-        return self.near_mesh_edge.twin.next.next
+        e = self.near_mesh_edge.twin.next
+        if e.origin == self.origin:
+            print("next.next")
+            return e.next
+        else:
+            print("next")
+            return e
+
+        # return self.near_mesh_edge.twin.next.next
 
     def init_intersections(self):
         for _ in self.init_intersections_one_at_a_time():
@@ -142,15 +150,23 @@ class HalfEdge(BaseHalfEdge):
             # try both edges
             # intersection1, error1 = e.get_intersection(prev_intersection, vec)
             # intersection2, error2 = e.next.get_intersection(prev_intersection, vec)
-            # if intersection1 is not None and intersection2 is not None:
+            #
+            # if intersection1 is None and intersection2 is None:
+            #     print("Midpoint calculation has failed")
+            #     yield None, None, None, None; return
+            # elif intersection1 is None:
+            #     intersection, e = intersection2, e.next
+            # elif intersection2 is None:
+            #     intersection = intersection1
+            # else:
             #     if error1 < error2:
             #         intersection = intersection1
             #     else:
-            #         intersection = intersection2
-            intersection = e.get_intersection(prev_intersection, vec)
+            #         intersection, e = intersection2, e.next
+            intersection,_ = e.get_intersection(prev_intersection, vec)
             if intersection is None:
                 e = e.next
-                intersection = e.get_intersection(prev_intersection, vec)
+                intersection,_ = e.get_intersection(prev_intersection, vec)
                 if intersection is None:
                     print("Midpoint calculation has failed")
                     yield None, None, None, None; return
@@ -281,7 +297,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         self.twin.mesh_face_angle = angle
 
     def get_intersection(self, line_start, line_vec):
-        intersection = get_closest_point(self.origin_coords, self.vec, line_start, line_vec)
+        intersection, error = get_closest_point(self.origin_coords, self.vec, line_start, line_vec)
 
         # make sure that it is within the line segment
         diff = intersection - self.origin_coords
@@ -290,9 +306,18 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
                 continue
             t = diff[i] / self.vec[i]
             if not(0 <= t <= 1):
-                return None
+                return None, None
 
-        return intersection
+        # make sure that it is in front of line_start
+        diff = intersection - line_start
+        for i in range(3):
+            if isclose(line_vec[i], 0):
+                continue
+            t = diff[i] / line_vec[i]
+            if not(0 <= t):
+                return None, None
+
+        return intersection, error
 
     def is_point_in_face(self, point, counter=0):
         if counter == 3:

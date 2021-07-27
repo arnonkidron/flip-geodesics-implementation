@@ -10,7 +10,10 @@ def get_angle(len1, len2, len3):
     Input: the lengths of 3 sides of a triangle
     Output: the angle between len1, len2, opposing len3, in radians
     """
-    return acos((len1 * len1 + len2 * len2 - len3 * len3) / (2.0 * len1 * len2))
+    arg = (len1 * len1 + len2 * len2 - len3 * len3) / (2.0 * len1 * len2)
+    if arg > 1:
+        arg = 1
+    return acos(arg)
 
 
 def get_side_length(a, b, angle):
@@ -95,11 +98,14 @@ def turn(v, theta, towards):
 def get_closest_point(start_A, vec_A, start_B, vec_B):
     """
     Input: 2 lines A,B, determined by a start point and a unit vector
-    Output: the point on line A that is closest to line B
+    Output: the point on line A that is closest to line B, and its distance
     source: https://math.stackexchange.com/questions/1993953/closest-points-between-two-lines
     """
     vec_C = np.cross(vec_A, vec_B)
     rhs = start_B - start_A
     lhs = np.array([vec_A, vec_B, vec_C]).T
     t1, t2, t3 = np.linalg.solve(lhs, rhs)
-    return start_A + vec_A * t1
+
+    point_on_A = start_A + vec_A * t1
+    distance = t3 / np.linalg.norm(vec_C)
+    return point_on_A, distance

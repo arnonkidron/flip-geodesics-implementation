@@ -122,15 +122,12 @@ class Scene:
                 self.slow_generator = None
             else:
                 actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
-                # self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.TRIANGULATION_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PICKED_PATH_WIDTH)
+                self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.RESULT_PATH_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
                 self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
-
-                actor = pv.PolyData([point, point + new_vec], [2, 0,1])
-                self.plotter.add_mesh(actor, name='next_vec', style='wireframe',
-                                      color='Green', render_lines_as_tubes=True,
-                                      line_width=prefer.PATH_EDGE_WIDTH)
+                arrow = pv.Arrow(start=point, direction=new_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+                self.plotter.add_mesh(arrow, name='next_vec', color='Green')
 
         # set up
         self.V, E, F, coloring = self.tri.get_poly_data()
@@ -192,38 +189,35 @@ class Scene:
     def on_make_geodesic(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
-        new_path = self.path_shortener.make_geodesic()
+        try:
+            new_path = self.path_shortener.make_geodesic()
+        except Triangulation.TriangulationException as err:
+            return self.warn(title="MakeGeodesic fail", msg=str(err))
 
-        self.result_path.set_path(new_path)
-        if prefer.SHOW_ON_MAKE_GEODESIC == prefer.ONLY_THE_RESULT:
-            self.on_pick_result_path()
+        self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
 
     def on_flip_out(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
-        new_path = self.path_shortener.flipout_the_minimal_wedge()
 
-        self.result_path.set_path(new_path)
-        if prefer.SHOW_ON_FLIPOUT == prefer.ONLY_THE_RESULT:
-            self.on_pick_result_path()
+        try:
+            new_path = self.path_shortener.flipout_the_minimal_wedge()
+        except Triangulation.TriangulationException as err:
+            return self.warn(title="FlipOut fail", msg=str(err))
+
+        self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
 
     def on_edge_flip(self):
         old_edge = self.path_picker.get_corresponding_edge()
         if old_edge is None:
             return
 
-        self.path_picker.clear()
+        try:
+            new_edge = self.tri.flip(old_edge)
+        except Triangulation.TriangulationException as err:
+            return self.warn(title="Edge flip fail", msg=str(err))
 
-        new_edge = self.tri.flip(old_edge)
-
-        # check for error
-        if isinstance(new_edge, str):
-            self.warn(title="Edge flip fail", msg=new_edge)
-            return
-
-        self.result_path.set_path_as_one_edge(new_edge)
-        if prefer.SHOW_ON_EDGE_FLIP == prefer.ONLY_THE_RESULT:
-            self.on_pick_result_path()
+        self.set_result([new_edge.origin, new_edge.dst], prefer.SHOW_ON_EDGE_FLIP)
 
         # compute intersection points
         if prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
@@ -233,12 +227,23 @@ class Scene:
 
         self.add_intrinsic_triangulation()
 
+    def set_result(self, path, what_to_show):
+        if what_to_show == prefer.NOTHING:
+            return self.on_clear()
+
+        self.result_path.set_path(path)
+
+        if what_to_show == prefer.ONLY_THE_RESULT:
+            self.on_pick_result_path()
+
+        self.add_intrinsic_triangulation()
+
     def on_info(self):
         msg = None
 
         idx = self.path_picker.get_single_point_index()
         if idx is not None:
-            coords = self.tri_actor.points[idx]
+            coords = self.V[idx]
             if self.path_picker.is_intersection_point(idx):
                 msg = "Intersection point\n" \
                       "({:.4f},{:.4f},{:.4f})\n"\
@@ -253,6 +258,15 @@ class Scene:
         e = self.path_picker.get_corresponding_edge()
         if e is not None:
             msg = e.get_info()
+
+        if msg is None:
+            path = self.path_picker.get_path()
+            msg = "Path "
+            for v in path:
+                msg += str(v)
+                msg += "->"
+
+            msg = msg[:-2]
 
         self.remove_text()
         if msg is None:
@@ -278,7 +292,7 @@ class Scene:
 
 
 if __name__ == '__main__':
+    # scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
     scene = Scene()
-    # scene = Scene()
     scene.show()
 
