@@ -1,7 +1,8 @@
-from edge import *
+from exceptions import *
 from Triangulation import *
 import numpy as np
 from utils import is_reflex
+
 
 class PathShortener:
     def __init__(self, triangulation):
@@ -18,7 +19,7 @@ class PathShortener:
 
     def set_path(self, path):
         self.path = path
-        self.is_geodesic = False
+        self.is_geodesic = len(path) <= 2
 
         self.wedge_angles_forth = [
             self.tri.get_wedge_angle(
@@ -57,9 +58,7 @@ class PathShortener:
 
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
         if is_reflex(wedge_angle):
-            # TODO: make an exception WedgeAngleReflexException
-            print("The wedge angle {:.2f}° is reflex".format(degrees(wedge_angle)))
-            return
+            raise WedgeReflexAngleException(wedge_angle)
 
         # find edges of this wedge
         e1 = self.tri.get_edge(a, b)
@@ -68,8 +67,7 @@ class PathShortener:
             return
 
         if e1 == e2 or e1 == e2.twin:
-            # TODO: make an exception
-            return
+            raise SelfEdgeException(a, b, c)
 
         # calculate bypassing path
         bypass = [a]
@@ -85,10 +83,10 @@ class PathShortener:
 
             try:
                 self.tri.flip(to_flip_edge)
-            except Triangulation.ReflexAngleException:
+            except ReflexAngleException:
                 i = i + 1
                 continue
-            except Triangulation.TriangulationException as err:
+            except TriangulationException as err:
                 raise err
 
             del bypass[i]
