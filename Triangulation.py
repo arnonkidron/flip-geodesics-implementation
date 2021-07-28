@@ -4,7 +4,7 @@ import numpy as np
 from copy import deepcopy
 from utils import turn, is_reflex
 import queue
-
+from IntrinsicFaceTriangulator import IntrinsicFaceTriangulator
 
 class BaseTriangulation:
     def __init__(self, V):
@@ -188,7 +188,7 @@ class Triangulation(BaseTriangulation):
         e = self.get_edge(origin, dst)
 
         if e is None:
-            raise NonExistentEdgeException(e)
+            raise NonExistentEdgeException(origin, dst)
 
         return self.flip(e)
 
@@ -228,10 +228,12 @@ class Triangulation(BaseTriangulation):
 
         return poly_vertices, np.array(poly_edges)
 
-    def get_poly_data(self):
+    def get_poly_data(self, need_extrinsic_faces=True):
         V = deepcopy(self.V)
         E = []
+        F = []
         coloring = []
+
         for f in self.all_faces():
             points = [None]
             for e in f:
@@ -240,21 +242,31 @@ class Triangulation(BaseTriangulation):
                 intersections = e.get_intersections()
                 if intersections is not None and len(intersections) > 0:
                     index_begin = len(V)
-                    V = np.vstack((V, intersections))
+                    V = np.vstack((V, [p.coords for p in intersections]))
                     index_end = len(V)
                     points.extend(list(range(index_begin, index_end)))
 
             points[0] = len(points) - 1
             E.append(points)
 
-            face_color = e.face_color
-            coloring.append(face_color)
+            if need_extrinsic_faces:
+                face_color = e.face_color
 
-
+                if points[0] == 3:
+                    F.append(points)
+                    coloring.append(face_color)
+                else:
+                    faces, num = self.get_extrinsic_faces(e, intrinsic_face=points[1:])
+                    F.append(faces)
+                    coloring.extend([face_color] * num)
 
         E = np.hstack(E)
+        F = np.hstack(F)
 
-        return V, E, E, coloring
+        return V, E, F, coloring
+
+    def get_extrinsic_faces(self, e, intrinsic_face):
+        return IntrinsicFaceTriangulator(e, intrinsic_face).get_faces()
 
     def init_coloring(self, num_faces, num_colors):
         self.face_coloring = np.zeros(num_faces, dtype=int) - 1

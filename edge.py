@@ -112,15 +112,7 @@ class HalfEdge(BaseHalfEdge):
         )
 
     def get_first_intersecting_mesh_edge(self):
-        e = self.near_mesh_edge.twin.next
-        if e.origin == self.origin:
-            print("next.next")
-            return e.next
-        else:
-            print("next")
-            return e
-
-        # return self.near_mesh_edge.twin.next.next
+        return self.near_mesh_edge.twin.next.next
 
     def init_intersections(self):
         for _ in self.init_intersections_one_at_a_time():
@@ -140,64 +132,63 @@ class HalfEdge(BaseHalfEdge):
             yield None, None, None; return
 
         # initial values
-        prev_intersection = self.near_mesh_edge.origin_coords
+        prev_intersection = Intersection(self.near_mesh_edge.origin_coords)
         vec = self.get_first_segment_vector()
-        e = self.get_first_intersecting_mesh_edge()
+        e1 = self.get_first_intersecting_mesh_edge()
+        e2 = e1
 
         while len(self.intersections) < 200:
-            # TODO: check if this is the problem, that there exists a good approximation although they don't really intersect
-            # I'll do it when we find it to fail again
             # try both edges
-            # intersection1, error1 = e.get_intersection(prev_intersection, vec)
-            # intersection2, error2 = e.next.get_intersection(prev_intersection, vec)
-            #
-            # if intersection1 is None and intersection2 is None:
-            #     print("Midpoint calculation has failed")
-            #     yield None, None, None, None; return
-            # elif intersection1 is None:
-            #     intersection, e = intersection2, e.next
-            # elif intersection2 is None:
-            #     intersection = intersection1
-            # else:
-            #     if error1 < error2:
-            #         intersection = intersection1
-            #     else:
-            #         intersection, e = intersection2, e.next
-            intersection,_ = e.get_intersection(prev_intersection, vec)
-            if intersection is None:
-                e = e.next
-                intersection,_ = e.get_intersection(prev_intersection, vec)
-                if intersection is None:
-                    print("Midpoint calculation has failed")
-                    yield None, None, None, None; return
-            self.intersections.append(intersection)
-            tmp1, tmp2, tmp3 = intersection, e, self
-            # yield tmp
+            intersection1, error1 = e1.get_intersection(prev_intersection.coords, vec)
+            intersection2, error2 = e2.get_intersection(prev_intersection.coords, vec)
 
-            e = e.twin
+            if intersection1 is None and intersection2 is None:
+                print("Midpoint calculation has failed")
+                yield None, None, None, None; return
+            elif intersection1 is None:
+                intersection = Intersection(intersection2, e2)
+            elif intersection2 is None:
+                intersection = Intersection(intersection1, e1)
+            else:
+                if error1 < error2:
+                    intersection = Intersection(intersection1, e1)
+                else:
+                    intersection = Intersection(intersection2, e2)
+            # intersection,_ = e.get_intersection(prev_intersection, vec)
+            # if intersection is None:
+            #     e = e.next
+            #     intersection,_ = e.get_intersection(prev_intersection, vec)
+            #     if intersection is None:
+            #         print("Midpoint calculation has failed")
+            #         yield None, None, None, None; return
+            self.intersections.append(intersection)
+            # yield intersection, self
+
+            e = intersection.mesh_edge.twin
             # if e.is_point_in_face(dst):
             #     yield tmp
             #     break
 
             prev_intersection = intersection
             vec = rotate(vec, 2 * pi - e.mesh_face_angle, e.vec)
-            # e = e.next
+            e1 = e.next
+            e2 = e1.next
 
-            n = e.get_face_normal()
-            print(np.dot(vec / np.linalg.norm(vec), n))
+            # n = e.get_face_normal()
+            # print(np.dot(vec / np.linalg.norm(vec), n))
 
+            yield intersection, self, vec
             if e.is_point_in_face(dst):
-                yield tmp1, tmp2, tmp3, vec
                 break
-            e = e.next
 
-            yield tmp1, tmp2, tmp3, vec
-
-        yield None, None, None, None; return
+        yield None, None, None; return
 
     def get_intersections(self):
-        if self.intersections is None and self.twin.intersections is not None:
-            return np.flipud(self.twin.get_intersections())
+        if self.intersections is None:
+            if self.twin.intersections is not None:
+                return np.flipud(self.twin.get_intersections())
+            else:
+                self.init_intersections()
 
         return self.intersections
 
@@ -305,8 +296,10 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
             if isclose(self.vec[i], 0):
                 continue
             t = diff[i] / self.vec[i]
-            if not(0 <= t <= 1):
-                return None, None
+            if not 0 <= t:
+                error = np.linalg.norm(intersection - self.origin_coords)
+            elif not t <= 1:
+                error = np.linalg.norm(intersection - self.next.origin_coords)
 
         # make sure that it is in front of line_start
         diff = intersection - line_start
@@ -327,4 +320,10 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
             return True
 
         return self.next.is_point_in_face(point, counter + 1)
+
+
+class Intersection:
+    def __init__(self, coords, mesh_edge=None):
+        self.coords = coords
+        self.mesh_edge = mesh_edge
 

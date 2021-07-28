@@ -6,10 +6,10 @@ class TriangulationException(BaseException):
 
 
 class NonExistentEdgeException(TriangulationException):
-    def __init__(self, e):
+    def __init__(self, origin, dst):
         msg = "Edge {}->{}, " \
               "does not exist" \
-            .format(e.origin, e.dst)
+            .format(origin, dst)
         super().__init__(msg)
 
 

@@ -97,6 +97,9 @@ class PathShortener:
         self.update_path(b_index, is_forth, bypass)
 
     def flipout_the_minimal_wedge(self):
+        if len(self.path) < 3:
+            return self.path
+
         # find minimal wedge
         min_index_forth = np.argmin(self.wedge_angles_forth)
         min_index_back = np.argmin(self.wedge_angles_back)

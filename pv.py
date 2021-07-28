@@ -117,10 +117,11 @@ class Scene:
             self.plotter.remove_actor('hit_point')
             self.plotter.remove_actor('next_vec')
 
-            point, mesh_edge, tri_edge, new_vec = next(self.slow_generator)
-            if point is None:
+            intersection, tri_edge, new_vec = next(self.slow_generator)
+            if intersection is None:
                 self.slow_generator = None
             else:
+                point, mesh_edge = intersection.coords, intersection.mesh_edge
                 actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.RESULT_PATH_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
@@ -130,7 +131,7 @@ class Scene:
                 self.plotter.add_mesh(arrow, name='next_vec', color='Green')
 
         # set up
-        self.V, E, F, coloring = self.tri.get_poly_data()
+        self.V, E, F, coloring = self.tri.get_poly_data(need_extrinsic_faces=prefer.SHOW_TRIANGULATION_FACES)
 
         self.tri_edge_actor = pv.PolyData(self.V, E)
         self.tri_face_actor = pv.PolyData(self.V, F)
@@ -191,7 +192,7 @@ class Scene:
         self.path_shortener.set_path(path)
         try:
             new_path = self.path_shortener.make_geodesic()
-        except Triangulation.TriangulationException as err:
+        except TriangulationException as err:
             return self.warn(title="MakeGeodesic fail", msg=str(err))
 
         self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
@@ -202,7 +203,7 @@ class Scene:
 
         try:
             new_path = self.path_shortener.flipout_the_minimal_wedge()
-        except Triangulation.TriangulationException as err:
+        except TriangulationException as err:
             return self.warn(title="FlipOut fail", msg=str(err))
 
         self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
@@ -214,7 +215,7 @@ class Scene:
 
         try:
             new_edge = self.tri.flip(old_edge)
-        except Triangulation.TriangulationException as err:
+        except TriangulationException as err:
             return self.warn(title="Edge flip fail", msg=str(err))
 
         self.set_result([new_edge.origin, new_edge.dst], prefer.SHOW_ON_EDGE_FLIP)
@@ -232,6 +233,7 @@ class Scene:
             return self.on_clear()
 
         self.result_path.set_path(path)
+        self.result_path.reconstruct_by_indices()
 
         if what_to_show == prefer.ONLY_THE_RESULT:
             self.on_pick_result_path()
@@ -292,7 +294,7 @@ class Scene:
 
 
 if __name__ == '__main__':
-    # scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
-    scene = Scene()
+    scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+    # scene = Scene()
     scene.show()
 

@@ -1,6 +1,7 @@
 import pyvista as pv
 import ViewPreferences as prefer
-
+import exceptions
+import numpy as np
 
 class PathVisualizer:
     def __init__(self, scene, **kwargs):
@@ -77,7 +78,21 @@ class PathVisualizer:
         self.whole_path_indices.extend(new_part)
 
         V = self.scene.tri.V[new_part]
-        E = [len(V)] + list(range(len(V)))
+        E = [None]
+        for i in range(len(V) - 1):
+            E.append(i)
+            e = self.scene.tri.get_edge(new_part[i], new_part[i+1])
+            if e is None:
+                raise exceptions.NonExistentEdgeException(new_part[i], new_part[i+1])
+            intersections = e.get_intersections()
+            if intersections is not None and len(intersections) > 0:
+                index_begin = len(V)
+                V = np.vstack((V, [p.coords for p in intersections]))
+                index_end = len(V)
+                E.extend(list(range(index_begin, index_end)))
+        E.append(len(V) - 1)
+
+        E[0] = len(E) - 1
         poly_data = pv.PolyData(V, lines=E)
         self.path_actor += poly_data
 
@@ -100,7 +115,7 @@ class PathVisualizer:
         for i in range(len(self.indices) - 1):
             self.update_path_edges(self.indices[i], self.indices[i + 1])
             if self.show_path_all_points:
-                current_point = self.scene.tri_actor.points[self.indices[i]]
+                current_point = self.scene.V[self.indices[i]]
                 self.path_actor += pv.PolyData(current_point)
 
 
