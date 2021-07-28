@@ -327,3 +327,4 @@ class Intersection:
         self.coords = coords
         self.mesh_edge = mesh_edge
 
+
