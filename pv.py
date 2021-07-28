@@ -212,7 +212,6 @@ class Scene:
         old_edge = self.path_picker.get_corresponding_edge()
         if old_edge is None:
             return
-
         try:
             new_edge = self.tri.flip(old_edge)
         except TriangulationException as err:

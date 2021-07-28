@@ -79,7 +79,8 @@ class PathVisualizer:
 
         V = self.scene.tri.V[new_part]
         E = [None]
-        for i in range(len(V) - 1):
+        last_vertex = len(V) - 1
+        for i in range(last_vertex):
             E.append(i)
             e = self.scene.tri.get_edge(new_part[i], new_part[i+1])
             if e is None:
@@ -90,7 +91,7 @@ class PathVisualizer:
                 V = np.vstack((V, [p.coords for p in intersections]))
                 index_end = len(V)
                 E.extend(list(range(index_begin, index_end)))
-        E.append(len(V) - 1)
+        E.append(last_vertex)
 
         E[0] = len(E) - 1
         poly_data = pv.PolyData(V, lines=E)
