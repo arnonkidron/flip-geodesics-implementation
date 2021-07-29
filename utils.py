@@ -33,7 +33,11 @@ def get_angle_between(vec1, vec2):
     return acos(dot_product)
 
 
-def is_reflex(angle):
+def is_reflex_or_flat(angle):
+    """
+    :arg angle:
+    :return: whether the angle is equal or greater than pi
+    """
     return angle >= pi - REFLEX_ANGLE_THRESHOLD
 
 

@@ -1,7 +1,7 @@
 from exceptions import *
 from Triangulation import *
 import numpy as np
-from utils import is_reflex
+from utils import is_reflex_or_flat
 
 
 class PathShortener:
@@ -57,7 +57,7 @@ class PathShortener:
             c, b, a = self.path[b_index - 1], self.path[b_index], self.path[b_index + 1]
 
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
-        if is_reflex(wedge_angle):
+        if is_reflex_or_flat(wedge_angle):
             raise WedgeReflexAngleException(wedge_angle)
 
         # find edges of this wedge
@@ -115,7 +115,7 @@ class PathShortener:
         # b_index is the index of the middle vertex of the wedge
         b_index = min_index + 1
 
-        if is_reflex(min_angle):
+        if is_reflex_or_flat(min_angle):
             self.is_geodesic = True
             return self.path
 

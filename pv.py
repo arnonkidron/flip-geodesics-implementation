@@ -20,11 +20,13 @@ class Scene:
 
         self.plotter = pv.Plotter()
 
+        self.shrank_mesh_face_actor = None
         self.mesh_actor = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
         self.tri_edge_actor = None
         self.tri_face_actor = None
 
+        self.slow_edge = None
         self.slow_generator = None
         self.result_path = PathVisualizer(self)
 
@@ -76,18 +78,23 @@ class Scene:
         self.plotter.show()
 
     def set_up_extrinsic_mesh(self, url):
-        actor = pv.read(url)
+        obj = pv.read(url)
 
-        if hasattr(actor, 'is_all_triangles'):
-            if not actor.is_all_triangles():
-                actor.triangulate()
+        if hasattr(obj, 'is_all_triangles'):
+            if not obj.is_all_triangles():
+                obj.triangulate()
 
-        V = actor.points
-        if hasattr(actor, 'faces'):
-            E = actor.faces
+        V = obj.points
+        if hasattr(obj, 'faces'):
+            E = obj.faces
         else:
-            E = actor.cells
+            E = obj.cells
+
         self.mesh_actor = pv.PolyData(V, lines=E)
+
+        obj.compute_normals(inplace=True)
+
+        self.shrank_mesh_face_actor = obj.warp_by_vector(factor=prefer.UNDERLYING_SHRINK_FACTOR)
 
         return self.mesh_actor
 
@@ -124,6 +131,15 @@ class Scene:
         self.plotter.remove_actor(mesh_kwargs['name'])
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
+        if prefer.SHOW_UNDERLYING_MESH_FACES:
+            shrank_mesh_kwargs = {
+                'name': 'shrank_extrinsic_mesh',
+                'color': prefer.UNDERLYING_COLOR,
+                'show_edges': False,
+                'show_scalar_bar': False,
+            }
+            self.plotter.add_mesh(self.shrank_mesh_face_actor, **shrank_mesh_kwargs)
+
     def add_intrinsic_triangulation(self):
         # advance intersection point computation by one step
         if self.slow_generator is not None:
@@ -132,12 +148,13 @@ class Scene:
             self.plotter.remove_actor('hit_point')
             self.plotter.remove_actor('next_vec')
 
-            intersection, tri_edge = next(self.slow_generator)
+            intersection = next(self.slow_generator)
             if intersection is None:
+                self.slow_edge = None
                 self.slow_generator = None
             else:
                 point, mesh_edge = intersection.coords, intersection.mesh_edge
-                actor = pv.PolyData([self.mesh_actor.points[tri_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
+                actor = pv.PolyData([self.mesh_actor.points[self.slow_edge.origin], self.mesh_actor.points[tri_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='slow_edge', style='wireframe', color=prefer.RESULT_PATH_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
@@ -217,9 +234,9 @@ class Scene:
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
 
-        while not self.path_shortener.is_geodesic:
-            self.on_flip_out()
-        return
+        # while not self.path_shortener.is_geodesic:
+        #     self.on_flip_out()
+        # return
 
         try:
             new_path = self.path_shortener.make_geodesic()
@@ -253,6 +270,7 @@ class Scene:
 
         # compute intersection points
         if prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
+            self.slow_edge = new_edge
             self.slow_generator = new_edge.init_intersections_one_at_a_time(self.tri.mesh)
         else:
             new_edge.init_intersections(self.tri.mesh)
@@ -260,13 +278,13 @@ class Scene:
         self.add_intrinsic_triangulation()
 
     def set_result(self, path, what_to_show):
-        if what_to_show == prefer.NOTHING:
+        if what_to_show == prefer.Show.NOTHING:
             return self.on_clear()
 
         self.result_path.set_path(path)
         self.result_path.reconstruct_by_indices()
 
-        if what_to_show == prefer.ONLY_THE_RESULT:
+        if what_to_show == prefer.Show.ONLY_THE_RESULT:
             self.on_pick_result_path()
 
         self.add_intrinsic_triangulation()
@@ -335,14 +353,23 @@ class Scene:
         actor = pv.PolyData()
         actor += pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
 
-        for intersection in e.get_intersections(self.tri.mesh):
-            actor += pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+        e.init_intersections(self.tri.mesh)
+        if e.intersections_status != e.Status.FAILED:
+            for intersection in e.get_intersections(self.tri.mesh):
+                actor += pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+        else:
+            pass
 
         self.plotter.add_mesh(actor, name='vecs', color='SpringGreen')
 
     def on_show_vecs_one_at_a_time(self):
         if self.slow_generator is None:
             self.slow_generator = self.show_vecs_one_at_a_time()
+
+        if self.slow_edge.intersections_status != self.slow_edge.Status.UNITIALIZED:
+            self.slow_edge = None
+            self.slow_generator = None
+            return
 
         next(self.slow_generator)
 
@@ -351,6 +378,7 @@ class Scene:
         e = self.path_picker.get_corresponding_edge()
         if e is None:
             return
+        self.slow_edge = e
 
         arrow = pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
         self.plotter.remove_actor('vecs')
@@ -395,14 +423,29 @@ if __name__ == '__main__':
     # scene = Scene()
     # scene.on_pick_by_index(1733)
     # scene.on_pick_by_index(1870)
-    scene.on_pick_by_index(2078)
-    scene.on_pick_by_index(2105)
+    # scene.on_pick_by_index(2078)
+    # scene.on_pick_by_index(2105)
 
-    scene.on_flip_out()
-    scene.on_flip_out()
-    scene.on_clear()
-    scene.on_pick_by_index(2098)
-    scene.on_pick_by_index(2106)
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_clear()
+    # scene.on_pick_by_index(2098)
+    # scene.on_pick_by_index(2106)
+
+    # scene.on_pick_by_index(1564)
+    # scene.on_pick_by_index(2097)
+    #
+    # scene.on_make_geodesic()
+    #
+    # scene.on_clear()
+
+    scene.on_pick_by_index(1916)
+    scene.on_pick_by_index(2109)
+
 
     scene.show()
 

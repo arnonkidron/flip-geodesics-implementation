@@ -3,6 +3,7 @@ import ViewPreferences as prefer
 import exceptions
 import numpy as np
 
+
 class PathVisualizer:
     def __init__(self, scene, **kwargs):
         self.path_actor = None
@@ -86,11 +87,28 @@ class PathVisualizer:
             if e is None:
                 raise exceptions.NonExistentEdgeException(new_part[i], new_part[i+1])
             intersections = e.get_intersections(self.scene.tri.mesh)
-            if intersections is not None and len(intersections) > 0:
+            if e.intersections_status != e.Status.FAILED \
+                    and len(intersections) > 0:
                 index_begin = len(V)
                 V = np.vstack((V, [p.coords for p in intersections]))
                 index_end = len(V)
                 E.extend(list(range(index_begin, index_end)))
+            elif e.intersections_status == e.Status.FAILED:
+                if not prefer.SHOW_FAILED_PATH_EDGES:
+                    E[0] = len(E) - 1
+                    poly_data = pv.PolyData(V, lines=E)
+                    self.path_actor += poly_data
+                    E = [None]
+                    continue
+                index_begin = len(V)
+                intersection_coords = [p.coords for p in intersections]
+                twin_intersection_coords = [p.coords for p in e.twin.get_intersections(self.scene.tri.mesh)]
+                V = np.vstack((V, intersection_coords))
+                if len(twin_intersection_coords) > 0:
+                    V = np.vstack((V, twin_intersection_coords[::-1]))
+                index_end = len(V)
+                E.extend(list(range(index_begin, index_end)))
+
         E.append(last_vertex)
 
         E[0] = len(E) - 1

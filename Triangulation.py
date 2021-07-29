@@ -2,9 +2,11 @@ from edge import *
 from exceptions import *
 import numpy as np
 from copy import deepcopy
-from utils import turn, is_reflex
+from utils import turn, is_reflex_or_flat
 from queue import PriorityQueue
 from IntrinsicFaceTriangulator import IntrinsicFaceTriangulator
+import ViewPreferences as prefer
+
 
 class BaseTriangulation:
     def __init__(self, V):
@@ -183,7 +185,6 @@ class Triangulation(BaseTriangulation):
         self.add_edge(curr)
 
         # stuff for rendering
-        curr.intersections = None
         self.set_coloring_new_triangle(curr, next, prev)
 
         return curr
@@ -210,28 +211,13 @@ class Triangulation(BaseTriangulation):
         triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
         triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle
 
-        if is_reflex(triangle_1_angle) or is_reflex(triangle_2_angle):
+        if is_reflex_or_flat(triangle_1_angle) or is_reflex_or_flat(triangle_2_angle):
             raise ReflexAngleException(old_edge)
 
         self.remove_edge(old_edge)
 
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
-
-        e.num_intersections = int(old_edge.is_on_mesh_edge()) \
-                              + triangle_1_prev.num_intersections \
-                              + triangle_2_prev.num_intersections \
-                              + triangle_1_next.num_intersections \
-                              + triangle_2_next.num_intersections \
-                              - old_edge.num_intersections
-
-        triangle_1_prev.print("triangle_1_prev.num_intersections", str(triangle_1_prev.num_intersections))
-        triangle_2_prev.print("triangle_2_prev.num_intersections", str(triangle_2_prev.num_intersections))
-        triangle_1_next.print("triangle_1_next.num_intersections", str(triangle_1_next.num_intersections))
-        triangle_2_next.print("triangle_2_next.num_intersections", str(triangle_2_next.num_intersections))
-        old_edge.print("old_edge.num_intersections", str(old_edge.num_intersections))
-
-        e.twin.num_intersections = e.num_intersections
 
         old_edge.print2("Flipped into", e)
         return e
@@ -255,11 +241,19 @@ class Triangulation(BaseTriangulation):
 
         for f in self.all_faces():
             points = [None]
+            is_face_failed = False
             for e in f:
                 points.append(e.origin)
 
                 intersections = e.get_intersections(mesh)
-                if intersections is not None and len(intersections) > 0:
+                if e.intersections_status == e.Status.FAILED:
+                    is_face_failed = True
+                    if not prefer.SHOW_FAILED_TRIANGULATION_EDGES:
+                        # add the points added so far to E, and start a new one
+                        points[0] = len(points) - 1
+                        E.append(points)
+                        points = [None]
+                elif len(intersections) > 0:
                     index_begin = len(V)
                     V = np.vstack((V, [p.coords for p in intersections]))
                     index_end = len(V)
@@ -268,7 +262,7 @@ class Triangulation(BaseTriangulation):
             points[0] = len(points) - 1
             E.append(points)
 
-            if need_extrinsic_faces:
+            if need_extrinsic_faces and not is_face_failed:
                 face_color = e.face_color
 
                 if points[0] == 3:
@@ -369,7 +363,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
 
     def get_intersection_complete_search(self, line_start, line_vec, search_source):
         NUM_EDGE_LIMIT = 200
-        DISTANCE_LIMIT = 7
+        DISTANCE_LIMIT = 2
         num_edge_count = 0
 
         for edge_list in self.in_edges:
@@ -395,7 +389,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
                 candidates.append(intersection)
 
             next_priority = priority + 1
-            if next_priority < DISTANCE_LIMIT and num_edge_count < NUM_EDGE_LIMIT:
+            if next_priority <= DISTANCE_LIMIT and num_edge_count < NUM_EDGE_LIMIT:
                 following_edge = e.next
                 while following_edge != twin:
                     q.put((next_priority, num_edge_count, following_edge))
