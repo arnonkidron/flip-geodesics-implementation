@@ -175,8 +175,14 @@ class HalfEdge(BaseHalfEdge):
                     self.twin.intersection_status = self.Status.TWIN_FINISHED
                     self.twin.intersections = []
                 else:
-                    # TODO: add another intersection
                     self.print("----------", " Both twins failed-----------")
+                    # add another point, above the previous one, in order to show the path
+                    e = prev_intersection.mesh_edge
+                    normal = e.get_face_normal() + e.twin.get_face_normal()
+                    normal /= np.linalg.norm(normal)
+                    lift_coords = prev_intersection.coords + normal
+                    lift = Intersection(lift_coords, is_fake=True)
+                    self.intersections.append(lift)
                 yield None; return
 
             self.intersections.append(intersection)
@@ -240,10 +246,13 @@ class HalfEdge(BaseHalfEdge):
         next.corner_angle = get_angle(self_len, next_len, prev_len)
 
     def print(self, prefix="", suffix=""):
-        print(prefix, self.a_name, suffix)
+        name = "{}->{}".format(self.origin, self.dst)
+        print(prefix, name, suffix)
 
     def print2(self, middle, other):
-        print(self.a_name, middle, other.a_name)
+        name = "{}->{}".format(self.origin, self.dst)
+        other_name = "{}->{}".format(other.origin, other.dst)
+        print(name, middle, other_name)
 
     def get_info(self):
         if self.angle_from_near_mesh_edge != 0:
@@ -289,6 +298,12 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
             self.next.next.face_normal = n
 
         return self.face_normal
+
+    def get_triangle_center(self):
+        return (self.origin_coords
+                + self.next.origin_coords
+                + self.next.next.origin_coords) \
+               / 3
 
     def init_face_angle(self):
         angle = get_angle_between(
@@ -338,10 +353,11 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
 
 
 class Intersection:
-    def __init__(self, coords, mesh_edge=None, error=None, out_vec=None):
+    def __init__(self, coords, mesh_edge=None, error=None, out_vec=None, is_fake=False):
         self.coords = coords
         self.mesh_edge = mesh_edge
         self.error = error
         self.out_vec = out_vec
+        self.is_fake = is_fake
 
 

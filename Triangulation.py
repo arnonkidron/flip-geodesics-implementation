@@ -366,6 +366,8 @@ class ExtrinsicTriangulation(BaseTriangulation):
         DISTANCE_LIMIT = 2
         num_edge_count = 0
 
+        trinagle_center = search_source.get_triangle_center()
+
         for edge_list in self.in_edges:
             for e in edge_list:
                 e.mark_unvisited()
@@ -399,7 +401,8 @@ class ExtrinsicTriangulation(BaseTriangulation):
         if len(candidates) == 0:
             return None
         print("------------- Successful complete search ------------")
-        return min(candidates, key=lambda x: x.error)
+        # return min(candidates, key=lambda x: x.error)
+        return min(candidates, key=lambda x: np.linalg.norm(x.coords - trinagle_center))
 
 
 
