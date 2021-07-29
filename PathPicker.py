@@ -85,7 +85,7 @@ class PathVisualizer:
             e = self.scene.tri.get_edge(new_part[i], new_part[i+1])
             if e is None:
                 raise exceptions.NonExistentEdgeException(new_part[i], new_part[i+1])
-            intersections = e.get_intersections()
+            intersections = e.get_intersections(self.scene.tri.mesh)
             if intersections is not None and len(intersections) > 0:
                 index_begin = len(V)
                 V = np.vstack((V, [p.coords for p in intersections]))

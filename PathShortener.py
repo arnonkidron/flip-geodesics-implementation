@@ -82,7 +82,7 @@ class PathShortener:
             to_flip_edge = self.tri.get_edge(bypass[i], b)
 
             try:
-                self.tri.flip(to_flip_edge)
+                e = self.tri.flip(to_flip_edge)
             except ReflexAngleException:
                 i = i + 1
                 continue

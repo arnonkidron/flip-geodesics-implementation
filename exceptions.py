@@ -44,3 +44,7 @@ class SelfEdgeException(TriangulationException):
         super().__init__(msg)
 
 
+class IntersectionNotFoundException(TriangulationException):
+    def __init__(self):
+        msg = "Intersection not found"
+        super().__init__(msg)

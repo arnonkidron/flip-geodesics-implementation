@@ -3,7 +3,7 @@ import ViewPreferences as prefer
 
 
 class IntrinsicFaceTriangulator:
-    def __init__(self, e, intrinsic_face):
+    def __init__(self, e, intrinsic_face, mesh):
         self.intrinsic_face = intrinsic_face
         self.n = len(intrinsic_face)
         self.matched_vertices = []
@@ -22,9 +22,9 @@ class IntrinsicFaceTriangulator:
         index_v = np.argmax(self.intrinsic_face == v)
         index_w = np.argmax(self.intrinsic_face == w)
 
-        to_match_uv = self.put_intersections_to_match(uv.get_intersections(), index_u, index_v, index_w)
-        to_match_vw = self.put_intersections_to_match(vw.get_intersections(), index_v, index_w, index_u)
-        to_match_wu = self.put_intersections_to_match(wu.get_intersections(), index_w, index_u, index_v)
+        to_match_uv = self.put_intersections_to_match(uv.get_intersections(mesh), index_u, index_v, index_w)
+        to_match_vw = self.put_intersections_to_match(vw.get_intersections(mesh), index_v, index_w, index_u)
+        to_match_wu = self.put_intersections_to_match(wu.get_intersections(mesh), index_w, index_u, index_v)
 
         self.match_vertices(to_match_uv, [to_match_vw, to_match_wu])
         self.match_vertices(to_match_vw, [to_match_wu])

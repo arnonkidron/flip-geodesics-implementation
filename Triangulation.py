@@ -3,7 +3,7 @@ from exceptions import *
 import numpy as np
 from copy import deepcopy
 from utils import turn, is_reflex
-import queue
+from queue import PriorityQueue
 from IntrinsicFaceTriangulator import IntrinsicFaceTriangulator
 
 class BaseTriangulation:
@@ -92,7 +92,7 @@ class BaseTriangulation:
 
         d[src] = 0
 
-        q = queue.PriorityQueue(maxsize=num_v)
+        q = PriorityQueue(maxsize=num_v)
         q.put((d[src], src))
 
         while not q.empty():
@@ -174,7 +174,11 @@ class Triangulation(BaseTriangulation):
         curr.corner_angle = get_angle(prev.length, curr.length, next.length)
         next.corner_angle = get_angle(curr.length, next.length, prev.length)
 
-        curr.init_near_mesh_edge()
+        such_mesh_edge = self.mesh.get_edge(curr.origin, curr.dst)
+        if such_mesh_edge is not None:
+            curr.sit_on_mesh_edge(such_mesh_edge)
+        else:
+            curr.init_near_mesh_edge()
 
         self.add_edge(curr)
 
@@ -214,6 +218,21 @@ class Triangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
+        e.num_intersections = int(old_edge.is_on_mesh_edge()) \
+                              + triangle_1_prev.num_intersections \
+                              + triangle_2_prev.num_intersections \
+                              + triangle_1_next.num_intersections \
+                              + triangle_2_next.num_intersections \
+                              - old_edge.num_intersections
+
+        triangle_1_prev.print("triangle_1_prev.num_intersections", str(triangle_1_prev.num_intersections))
+        triangle_2_prev.print("triangle_2_prev.num_intersections", str(triangle_2_prev.num_intersections))
+        triangle_1_next.print("triangle_1_next.num_intersections", str(triangle_1_next.num_intersections))
+        triangle_2_next.print("triangle_2_next.num_intersections", str(triangle_2_next.num_intersections))
+        old_edge.print("old_edge.num_intersections", str(old_edge.num_intersections))
+
+        e.twin.num_intersections = e.num_intersections
+
         old_edge.print2("Flipped into", e)
         return e
 
@@ -228,7 +247,7 @@ class Triangulation(BaseTriangulation):
 
         return poly_vertices, np.array(poly_edges)
 
-    def get_poly_data(self, need_extrinsic_faces=True):
+    def get_poly_data(self, mesh, need_extrinsic_faces=True):
         V = deepcopy(self.V)
         E = []
         F = []
@@ -239,7 +258,7 @@ class Triangulation(BaseTriangulation):
             for e in f:
                 points.append(e.origin)
 
-                intersections = e.get_intersections()
+                intersections = e.get_intersections(mesh)
                 if intersections is not None and len(intersections) > 0:
                     index_begin = len(V)
                     V = np.vstack((V, [p.coords for p in intersections]))
@@ -266,7 +285,7 @@ class Triangulation(BaseTriangulation):
         return V, E, F, coloring
 
     def get_extrinsic_faces(self, e, intrinsic_face):
-        return IntrinsicFaceTriangulator(e, intrinsic_face).get_faces()
+        return IntrinsicFaceTriangulator(e, intrinsic_face, self.mesh).get_faces()
 
     def init_coloring(self, num_faces, num_colors):
         self.face_coloring = np.zeros(num_faces, dtype=int) - 1
@@ -347,3 +366,46 @@ class ExtrinsicTriangulation(BaseTriangulation):
     def init_face_angles(self):
         for e in self.all_edges():
             e.init_face_angle()
+
+    def get_intersection_complete_search(self, line_start, line_vec, search_source):
+        NUM_EDGE_LIMIT = 200
+        DISTANCE_LIMIT = 7
+        num_edge_count = 0
+
+        for edge_list in self.in_edges:
+            for e in edge_list:
+                e.mark_unvisited()
+
+        candidates = []
+        q = PriorityQueue(maxsize=NUM_EDGE_LIMIT)
+        q.put((0, -3, search_source))
+        q.put((0, -2, search_source.next))
+        q.put((0, -1, search_source.next.next))
+
+        while not q.empty():
+            (priority, _, e) = q.get()
+            if e.was_visited():
+                continue
+            twin = e.twin
+            e.mark_visited()
+            twin.mark_visited()
+
+            intersection = e.get_intersection(line_start, line_vec)
+            if intersection is not None:
+                candidates.append(intersection)
+
+            next_priority = priority + 1
+            if next_priority < DISTANCE_LIMIT and num_edge_count < NUM_EDGE_LIMIT:
+                following_edge = e.next
+                while following_edge != twin:
+                    q.put((next_priority, num_edge_count, following_edge))
+                    num_edge_count += 1
+                    following_edge = following_edge.twin.next
+
+        if len(candidates) == 0:
+            return None
+        print("------------- Successful complete search ------------")
+        return min(candidates, key=lambda x: x.error)
+
+
+

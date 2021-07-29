@@ -1,6 +1,6 @@
 import pyvista as pv
 import numpy as np
-from tkinter import Tk, messagebox
+from tkinter import Tk, messagebox, simpledialog
 from tkinter.filedialog import askopenfilename
 from FlipEdgeNetwork import *
 from Triangulation import *
@@ -19,6 +19,7 @@ class Scene:
         self.V = None
 
         self.plotter = pv.Plotter()
+
         self.mesh_actor = self.set_up_extrinsic_mesh(url)
         self.tri = self.set_up_triangulation()
         self.tri_edge_actor = None
@@ -54,6 +55,15 @@ class Scene:
         return mesh_url
 
     @staticmethod
+    def ask_for_integer(msg):
+        tk = Tk()
+        tk.withdraw()
+        answer = simpledialog.askstring(title="Input", prompt=msg, parent=tk)
+        if answer is None:
+            return None
+        return int(answer)
+
+    @staticmethod
     def warn(title, msg):
         """
         Outcome: display the message in a tkinter window, with retry & cancel
@@ -78,6 +88,7 @@ class Scene:
         else:
             E = actor.cells
         self.mesh_actor = pv.PolyData(V, lines=E)
+
         return self.mesh_actor
 
     def set_up_triangulation(self):
@@ -106,6 +117,10 @@ class Scene:
         else:
             mesh_kwargs['color'] = prefer.MESH_FACE_COLOR
 
+        if prefer.LABEL_VERTICES:
+            self.plotter.add_point_labels(self.mesh_actor, range(self.mesh_actor.n_points),
+                                           font_size=10)
+
         self.plotter.remove_actor(mesh_kwargs['name'])
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
@@ -117,7 +132,7 @@ class Scene:
             self.plotter.remove_actor('hit_point')
             self.plotter.remove_actor('next_vec')
 
-            intersection, tri_edge, new_vec = next(self.slow_generator)
+            intersection, tri_edge = next(self.slow_generator)
             if intersection is None:
                 self.slow_generator = None
             else:
@@ -127,11 +142,11 @@ class Scene:
                 actor = pv.PolyData([self.mesh_actor.points[mesh_edge.origin], self.mesh_actor.points[mesh_edge.dst]], [2, 0, 1])
                 self.plotter.add_mesh(actor, name='hit_edge', style='wireframe', color=prefer.COMPUTED_INTERSECTING_EDGE_COLOR, render_lines_as_tubes=True, line_width=prefer.PATH_EDGE_WIDTH)
                 self.plotter.add_mesh(pv.PolyData(point), name='hit_point', color=prefer.COMPUTED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
-                arrow = pv.Arrow(start=point, direction=new_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+                arrow = pv.Arrow(start=point, direction=intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
                 self.plotter.add_mesh(arrow, name='next_vec', color='Green')
 
         # set up
-        self.V, E, F, coloring = self.tri.get_poly_data(need_extrinsic_faces=prefer.SHOW_TRIANGULATION_FACES)
+        self.V, E, F, coloring = self.tri.get_poly_data(self.tri.mesh, need_extrinsic_faces=prefer.SHOW_TRIANGULATION_FACES)
 
         self.tri_edge_actor = pv.PolyData(self.V, E)
         self.tri_face_actor = pv.PolyData(self.V, F)
@@ -176,9 +191,20 @@ class Scene:
             prefer.KEY_EVENT_PICK_TWIN_EDGE: self.path_picker.on_pick_twin_edge,
             prefer.KEY_EVENT_RE_RENDER: self.add_intrinsic_triangulation,
             prefer.KEY_EVENT_PICK_RESULT_PATH: self.on_pick_result_path,
+            prefer.KEY_EVENT_CLEAR_RESULT_PATH: self.on_clear_result_path,
+            prefer.KEY_EVENT_PICK_BY_INDEX: self.on_pick_by_index,
+            prefer.KEY_EVENT_SHOW_VECS_ONE_AT_A_TIME: self.on_show_vecs_one_at_a_time,
         }
         for key, callback in bindings.items():
             self.plotter.add_key_event(key, callback)
+
+    def on_pick_by_index(self, idx=None):
+        if idx is None:
+            idx = self.ask_for_integer("Enter a vertex index to pick:")
+            if idx is None:
+                return
+
+        self.path_picker.on_pick(self.V[idx])
 
     def on_single_source(self):
         idx = self.path_picker.get_single_point_index()
@@ -190,12 +216,18 @@ class Scene:
     def on_make_geodesic(self):
         path = self.path_picker.whole_path_indices
         self.path_shortener.set_path(path)
+
+        while not self.path_shortener.is_geodesic:
+            self.on_flip_out()
+        return
+
         try:
             new_path = self.path_shortener.make_geodesic()
+            self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
         except TriangulationException as err:
             return self.warn(title="MakeGeodesic fail", msg=str(err))
 
-        self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
+
 
     def on_flip_out(self):
         path = self.path_picker.whole_path_indices
@@ -203,10 +235,10 @@ class Scene:
 
         try:
             new_path = self.path_shortener.flipout_the_minimal_wedge()
+            self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
         except TriangulationException as err:
             return self.warn(title="FlipOut fail", msg=str(err))
 
-        self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
 
     def on_edge_flip(self):
         old_edge = self.path_picker.get_corresponding_edge()
@@ -221,9 +253,9 @@ class Scene:
 
         # compute intersection points
         if prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
-            self.slow_generator = new_edge.init_intersections_one_at_a_time()
+            self.slow_generator = new_edge.init_intersections_one_at_a_time(self.tri.mesh)
         else:
-            new_edge.init_intersections()
+            new_edge.init_intersections(self.tri.mesh)
 
         self.add_intrinsic_triangulation()
 
@@ -276,8 +308,71 @@ class Scene:
             self.text_actor = self.plotter.add_text(msg, name='info')
             print(msg)
 
+        self.on_show_vecs()
+
+    def on_show_vecs(self):
+        idx = self.path_picker.get_single_point_index()
+        if idx is not None:
+            self.show_vec_from_vertex(idx)
+
+        e = self.path_picker.get_corresponding_edge()
+        if e is not None:
+            self.show_vec_from_edge(e)
+
+
+    def show_vec_from_vertex(self, idx):
+        coords = self.V[idx]
+        actor = pv.PolyData()
+        for in_edge in self.tri.in_edges[idx]:
+            out_edge = in_edge.twin
+            vec = out_edge.get_first_segment_vector()
+
+            actor += pv.Arrow(coords, vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+
+        self.plotter.add_mesh(actor, name='vecs', color='SpringGreen')
+
+    def show_vec_from_edge(self, e):
+        actor = pv.PolyData()
+        actor += pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
+
+        for intersection in e.get_intersections(self.tri.mesh):
+            actor += pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+
+        self.plotter.add_mesh(actor, name='vecs', color='SpringGreen')
+
+    def on_show_vecs_one_at_a_time(self):
+        if self.slow_generator is None:
+            self.slow_generator = self.show_vecs_one_at_a_time()
+
+        next(self.slow_generator)
+
+
+    def show_vecs_one_at_a_time(self):
+        e = self.path_picker.get_corresponding_edge()
+        if e is None:
+            return
+
+        arrow = pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
+        self.plotter.remove_actor('vecs')
+        self.plotter.add_mesh(arrow, name='vecs', color='SpringGreen')
+        yield
+
+        for intersection in e.get_intersections(self.tri.mesh):
+            arrow = pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+            point = pv.PolyData(intersection.coords)
+            self.plotter.add_mesh(point, name='intersection', color=prefer.PICKED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
+            self.plotter.add_mesh(arrow, name='vecs', color='SpringGreen')
+            yield
+
+        self.plotter.remove_actor('intersection')
+        self.plotter.remove_actor('vecs')
+        self.slow_generator = None
+
     def remove_text(self):
         self.plotter.remove_actor(self.text_actor)
+        self.plotter.remove_actor('vecs')
+        self.slow_generator = None
+
 
     def on_clear(self):
         self.path_picker.clear()
@@ -291,9 +386,23 @@ class Scene:
         self.path_picker.set_path(self.result_path.get_path())
         self.result_path.clear()
 
+    def on_clear_result_path(self):
+        self.result_path.clear()
+
 
 if __name__ == '__main__':
     scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
     # scene = Scene()
+    # scene.on_pick_by_index(1733)
+    # scene.on_pick_by_index(1870)
+    scene.on_pick_by_index(2078)
+    scene.on_pick_by_index(2105)
+
+    scene.on_flip_out()
+    scene.on_flip_out()
+    scene.on_clear()
+    scene.on_pick_by_index(2098)
+    scene.on_pick_by_index(2106)
+
     scene.show()
 

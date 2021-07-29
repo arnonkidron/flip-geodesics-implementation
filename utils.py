@@ -1,6 +1,6 @@
 from math import acos, cos, sin, sqrt, pi
 import numpy as np
-import ViewPreferences as prefer
+from NumericErrorThresholds import *
 
 ################################################
 # the cosine theorem for angles and side lengths
@@ -34,7 +34,7 @@ def get_angle_between(vec1, vec2):
 
 
 def is_reflex(angle):
-    return angle >= pi - prefer.REFLEX_ANGLE_THRESHOLD
+    return angle >= pi - REFLEX_ANGLE_THRESHOLD
 
 
 def orientation(p1, p2, p3):
