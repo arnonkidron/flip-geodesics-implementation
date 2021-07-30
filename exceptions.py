@@ -16,7 +16,7 @@ class NonExistentEdgeException(TriangulationException):
 class MistriangulationException(TriangulationException):
     def __init__(self, e):
         msg = "Cannot flip edge {}->{}, " \
-              "because on of its incident faces is not a triangle" \
+              "because on of its incident faces are not a triangle" \
             .format(e.origin, e.dst)
         super().__init__(msg)
 

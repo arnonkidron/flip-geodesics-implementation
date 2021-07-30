@@ -29,24 +29,6 @@ class IntrinsicFaceTriangulator:
         self.match_vertices(to_match_uv, [to_match_vw, to_match_wu])
         self.match_vertices(to_match_vw, [to_match_wu])
 
-        # for (x, e) in to_match_uv:
-        #     for other_list in [to_match_vw, to_match_wu]:
-        #         y = self.find_match(e, other_list)
-        #         if y is None:
-        #             if other_list == to_match_wu:
-        #                 raise "Fail"
-        #             continue
-        #         self.matched_vertices.append((x, y))
-        #         del other_list[y]
-        #
-        # for (x, e) in to_match_vw:
-        #     other_list = to_match_wu
-        #     y = self.find_match(e, other_list)
-        #     if y is None:
-        #         raise "Fail"
-        #     self.matched_vertices.append((x, y))
-        #     del other_list[y]
-
         self.compute_edges()
         self.compute_faces()
 

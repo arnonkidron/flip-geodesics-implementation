@@ -222,16 +222,12 @@ class Triangulation(BaseTriangulation):
         old_edge.print2("Flipped into", e)
         return e
 
-    def get_polyline(self):
-        poly_vertices = deepcopy(self.V)
-        poly_edges = []
-        for e in self.all_edges():
-            e_V, e_E = e.get_polyline(index_difference=len(poly_vertices))
-            if len(e_V) > 0:
-                poly_vertices = np.vstack([poly_vertices, e_V])
-            poly_edges.extend(e_E)
-
-        return poly_vertices, np.array(poly_edges)
+    def delaunay(self, excluded_edges):
+        # flag = False
+        # while not flag:
+        #     e = min()
+        #     self.flip(e)
+        pass
 
     def get_poly_data(self, mesh, need_extrinsic_faces=True):
         V = deepcopy(self.V)
