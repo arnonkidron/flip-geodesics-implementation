@@ -363,43 +363,46 @@ class Scene:
         self.plotter.add_mesh(actor, name='vecs', color='SpringGreen')
 
     def on_show_vecs_one_at_a_time(self):
-        if self.slow_generator is None:
+        if self.slow_edge is None:
             self.slow_generator = self.show_vecs_one_at_a_time()
-
-        if self.slow_edge.intersections_status != self.slow_edge.Status.UNITIALIZED:
-            self.slow_edge = None
-            self.slow_generator = None
-            return
+            self.slow_edge = next(self.slow_generator)
+            if self.slow_edge is None:
+                self.warn("", "No single edge selected")
+                return
 
         next(self.slow_generator)
 
-
     def show_vecs_one_at_a_time(self):
         e = self.path_picker.get_corresponding_edge()
+        yield e
         if e is None:
             return
-        self.slow_edge = e
 
         arrow = pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
         self.plotter.remove_actor('vecs')
         self.plotter.add_mesh(arrow, name='vecs', color='SpringGreen')
-        yield
+        yield True
 
         for intersection in e.get_intersections(self.tri.mesh):
+            if e.intersections_status != e.Status.UNINITIALIZED:
+                break
             arrow = pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
             point = pv.PolyData(intersection.coords)
             self.plotter.add_mesh(point, name='intersection', color=prefer.PICKED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
             self.plotter.add_mesh(arrow, name='vecs', color='SpringGreen')
-            yield
+            yield True
 
         self.plotter.remove_actor('intersection')
         self.plotter.remove_actor('vecs')
         self.slow_generator = None
+        self.slow_edge = None
+        yield False
 
     def remove_text(self):
         self.plotter.remove_actor(self.text_actor)
         self.plotter.remove_actor('vecs')
         self.slow_generator = None
+        self.slow_edge = None
 
 
     def on_clear(self):
@@ -443,9 +446,19 @@ if __name__ == '__main__':
     #
     # scene.on_clear()
 
-    scene.on_pick_by_index(1916)
-    scene.on_pick_by_index(2109)
+    # scene.on_pick_by_index(1916)
+    # scene.on_pick_by_index(2109)
 
+    # DONE: check why intersection fails
+    # scene.on_pick_by_index(1789)
+    # scene.on_pick_by_index(1929)
+
+    # DONE: check why intersection fails? Because of the low INTERSECTION_THRESHOLD
+    scene.on_pick_by_index(349)
+    scene.on_pick_by_index(157)
+    scene.on_flip_out()
+    scene.on_flip_out()
+    scene.on_flip_out()
 
     scene.show()
 

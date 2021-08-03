@@ -21,6 +21,15 @@ class MistriangulationException(TriangulationException):
         super().__init__(msg)
 
 
+class LowDegreeVertexException(TriangulationException):
+    def __init__(self, e, idx, deg):
+        msg = "Cannot flip edge {}->{}, " \
+              "because vertex {} has degree {}" \
+            .format(e.origin, e.dst,
+                    idx, deg)
+        super().__init__(msg)
+
+
 class ReflexAngleException(TriangulationException):
     def __init__(self, e):
         msg = "Cannot flip edge {}->{}, " \
