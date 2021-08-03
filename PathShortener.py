@@ -8,6 +8,7 @@ class PathShortener:
     def __init__(self, triangulation):
         self.tri = triangulation
         self.path = []
+        self.is_loop = None
         self.is_geodesic = None
 
         self.length = 0
@@ -17,8 +18,12 @@ class PathShortener:
     def get_path(self):
         return self.path
 
+    def get_vertex(self, idx):
+        return self.path[idx % len(self.path)]
+
     def set_path(self, path):
         self.path = path
+        self.is_loop = False
         self.is_geodesic = len(path) <= 2
 
         self.wedge_angles_forth = [
@@ -37,8 +42,32 @@ class PathShortener:
         ]
         self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
 
+    def set_loop(self, path):
+        if path[-1] == path[0]:
+            path.pop()
+        self.path = path
+        self.is_loop = True
+        self.is_geodesic = len(path) <= 1
+
+        self.wedge_angles_forth = [
+            self.tri.get_wedge_angle(
+                self.get_vertex(i-1),
+                self.get_vertex(i),
+                self.get_vertex(i+1),
+            ) for i in range(1, len(path) - 1 + 2)
+        ]
+        self.wedge_angles_back = [
+            self.tri.get_wedge_angle(
+                self.get_vertex(i+1),
+                self.get_vertex(i),
+                self.get_vertex(i-1),
+            ) for i in range(len(path) - 2, 0 - 2, -1)
+        ]
+        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
+
     def update_path(self, b_index, is_forth, bypass):
         # remove b
+        b_index = b_index % len(self.path)
         del self.path[b_index]
 
         # insert bypass to replace it
@@ -47,14 +76,17 @@ class PathShortener:
             b_index += 1
         self.path[b_index:b_index] = bypass[1:-1]
 
-        self.set_path(self.path)
+        if self.is_loop:
+            self.set_loop(self.path)
+        else:
+            self.set_path(self.path)
 
     def flipout(self, b_index, is_forth):
         if is_forth:
-            a, b, c = self.path[b_index - 1], self.path[b_index], self.path[b_index + 1]
+            a, b, c = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
         else:
             b_index = -b_index - 1
-            c, b, a = self.path[b_index - 1], self.path[b_index], self.path[b_index + 1]
+            c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
 
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
         if is_reflex_or_flat(wedge_angle):
@@ -98,6 +130,7 @@ class PathShortener:
 
     def flipout_the_minimal_wedge(self):
         if len(self.path) < 3:
+            self.is_geodesic = True
             return self.path
 
         # find minimal wedge
@@ -142,5 +175,3 @@ class PathShortener:
 
         return self.path
 
-    def is_geodesic(self):
-        return False

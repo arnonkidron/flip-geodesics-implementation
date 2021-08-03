@@ -157,6 +157,8 @@ class PathPicker(PathVisualizer):
             show_message=False,
         )
 
+        self.is_loop = False
+
     def add_actor(self):
         self.remove_actor()
         if not self.show_path:
@@ -243,3 +245,8 @@ class PathPicker(PathVisualizer):
         self.reconstruct_by_indices()
         self.add_actor()
         self.scene.remove_text()
+
+    def on_close_loop(self):
+        self.on_pick(self.scene.tri.V[self.first_index])
+        self.is_loop = True
+

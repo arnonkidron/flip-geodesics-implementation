@@ -204,6 +204,7 @@ class Scene:
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
+            prefer.KEY_EVENT_CLOSE_LOOP: self.path_picker.on_close_loop,
             prefer.KEY_EVENT_PICK_NEXT_EDGE: self.path_picker.on_pick_next_edge,
             prefer.KEY_EVENT_PICK_TWIN_EDGE: self.path_picker.on_pick_twin_edge,
             prefer.KEY_EVENT_RE_RENDER: self.add_intrinsic_triangulation,
@@ -232,7 +233,10 @@ class Scene:
 
     def on_make_geodesic(self):
         path = self.path_picker.whole_path_indices
-        self.path_shortener.set_path(path)
+        if self.path_picker.is_loop:
+            self.path_shortener.set_loop(path)
+        else:
+            self.path_shortener.set_path(path)
 
         # while not self.path_shortener.is_geodesic:
         #     self.on_flip_out()
@@ -454,11 +458,16 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(1929)
 
     # DONE: check why intersection fails? Because of the low INTERSECTION_THRESHOLD
-    scene.on_pick_by_index(349)
-    scene.on_pick_by_index(157)
-    scene.on_flip_out()
-    scene.on_flip_out()
-    scene.on_flip_out()
+    # scene.on_pick_by_index(349)
+    # scene.on_pick_by_index(157)
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+
+    scene.on_pick_by_index(1876)
+    scene.on_pick_by_index(1852)
+    scene.on_pick_by_index(1875)
+    scene.path_picker.on_close_loop()
 
     scene.show()
 
