@@ -288,6 +288,7 @@ class IntrinsicTriangulation(BaseTriangulation):
                     is_face_failed = True
                     if not prefer.SHOW_FAILED_TRIANGULATION_EDGES:
                         # add the points added so far to E, and start a new one
+                        points.extend(points[-1:0:-1])
                         points[0] = len(points) - 1
                         E.append(points)
                         points = [None]
