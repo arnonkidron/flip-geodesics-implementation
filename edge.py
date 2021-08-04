@@ -7,7 +7,19 @@ from enum import Enum
 
 
 class BaseHalfEdge:
+    """
+    A base class for IntrinsicHalfEdge, ExtrinsicHalfEdge.
+    Every edge has twin & next edges as in DCEL. No prev, because all faces are triangles.
+    The edge's endpoints are origin and dst.
+    :field corner_angle: the angle between the edge and its prev
+    :field visited: for DFS search
+    :field a_name: just to show the edge's endpoints during debugging
+    """
     def __init__(self, twin, origin):
+        """
+        :param twin: the twin half-edge object, or none if it does not exist
+        :param origin: the first endpoint
+        """
         self.twin = twin
 
         self.origin = origin
@@ -17,7 +29,6 @@ class BaseHalfEdge:
 
         self.a_name = "{}->".format(origin)
 
-        self.face_color = None
         self.visited = False
         self.mark_unvisited()
 
@@ -27,7 +38,7 @@ class BaseHalfEdge:
 
     def set_next(self, next):
         self.next = next
-        self.a_name += str(self.dst)
+        self.a_name = "{}->{}".format(self.origin, self.dst)
 
     @property
     def twin(self):
@@ -42,7 +53,6 @@ class BaseHalfEdge:
     #################
     #   traversal
     #################
-
     def mark_unvisited(self):
         self.visited = False
 
@@ -53,16 +63,26 @@ class BaseHalfEdge:
         return self.visited
 
 
-class HalfEdge(BaseHalfEdge):
+class IntrinsicHalfEdge(BaseHalfEdge):
+    """
+    half-edges for IntrinsicTriangulations
+    :field length: the edge's length
+
+    :field near_mesh_edge: the nearest edge from the left in the extrinsic triangulation
+    :field angle_from_near_mesh_edge: the angle from it
+    Note that this is not how angles are stored in the SignPost datastructure which we did not implement
+
+    :field intersections: the intersection points of this edge with extrinsic edges
+    :field intersections_status: whether we finished computing them
+    :field face_color: the color to be rendered for the incident intrinsic triangle
+    """
     def __init__(self, twin, origin, length):
         """
-        :param twin:
-        :param origin:
-        :param vec:
-        :param mesh_face:
+        :arg length: the edge's length
 
-        The user must call set_next, calc_angles after he finish
-        constructing the other sides of the triangle.
+        __init__ does not initialize next, corner_angle and near_mesh_edge. The user
+        must call the appropriate methods, after he finish constructing the other half-edges
+        of the triangle in order to complete initialization.
         """
         super().__init__(twin, origin)
 
@@ -75,6 +95,8 @@ class HalfEdge(BaseHalfEdge):
         self.intersections = []
         self.intersections_status = self.Status.UNINITIALIZED
 
+        self.face_color = None
+
     class Status(Enum):
         UNINITIALIZED = 1
         FINISHED = 2
@@ -82,6 +104,13 @@ class HalfEdge(BaseHalfEdge):
         FAILED = 4
 
     def to_extrinsic(self, V):
+        """
+        A constructor for extrinsic edges
+        Creates the extrinsic edge that coincides with this intrinsic edge,
+        and links this intrinsic edge to it.
+        :arg V: the vertices coordinates
+        :return: the new extrinsic edge
+        """
         ex_half_edge = ExtrinsicHalfEdge(None, self.origin, V[self.origin], V[self.dst])
         ex_half_edge.corner_angle = self.corner_angle
 
@@ -89,6 +118,33 @@ class HalfEdge(BaseHalfEdge):
 
         return ex_half_edge
 
+    ##########################
+    # length & corner_angle
+    ##########################
+    def set_length(self, length):
+        if self.length is None:
+            self.length = length
+            if self.twin is not None:
+                self.twin.length = length
+
+    def get_length(self):
+        return self.length
+
+    def calc_angles(self):
+        next = self.next
+        prev = next.next
+
+        prev_len = prev.get_length()
+        self_len = self.get_length()
+        next_len = next.get_length()
+
+        prev.corner_angle = get_angle(next_len, prev_len, self_len)
+        self.corner_angle = get_angle(prev_len, self_len, next_len)
+        next.corner_angle = get_angle(self_len, next_len, prev_len)
+
+    #####################
+    #   near_mesh_edge
+    #####################
     def init_near_mesh_edge(self):
         neighbour = self.next.next.twin
         self.near_mesh_edge = neighbour.near_mesh_edge
@@ -156,9 +212,9 @@ class HalfEdge(BaseHalfEdge):
 
             if False and candidate1 is None and candidate2 is None:
                 intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vec, e1)
-                if intersection is not None \
-                        and intersection.error > INTERSECTION_THRESHOLD:
-                    intersection = None
+                # if intersection is not None \
+                #         and intersection.error > INTERSECTION_THRESHOLD:
+                #     intersection = None
             elif candidate1 is None:
                 intersection = candidate2
             elif candidate2 is None:
@@ -224,26 +280,10 @@ class HalfEdge(BaseHalfEdge):
         elif self.intersections_status == self.Status.FAILED:
             return self.intersections
 
-    def set_length(self, length):
-        if self.length is None:
-            self.length = length
-            if self.twin is not None:
-                self.twin.length = length
 
-    def get_length(self):
-        return self.length
-
-    def calc_angles(self):
-        next = self.next
-        prev = next.next
-
-        prev_len = prev.get_length()
-        self_len = self.get_length()
-        next_len = next.get_length()
-
-        prev.corner_angle = get_angle(next_len, prev_len, self_len)
-        self.corner_angle = get_angle(prev_len, self_len, next_len)
-        next.corner_angle = get_angle(self_len, next_len, prev_len)
+    ##############
+    #    printing
+    ##############
 
     def print(self, prefix="", suffix=""):
         name = "{}->{}".format(self.origin, self.dst)
@@ -257,7 +297,8 @@ class HalfEdge(BaseHalfEdge):
     def get_info(self):
         if self.angle_from_near_mesh_edge != 0:
             n_mid = 0 if self.intersections is None else len(self.intersections)
-            intersection_report = "Has {} intersections\n".format(n_mid)
+            status = self.intersections_status.name
+            intersection_report = "{} with {} intersections\n".format(status, n_mid)
         else:
             intersection_report = ""
 

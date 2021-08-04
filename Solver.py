@@ -1,12 +1,12 @@
 from FlipEdgeNetwork import FlipEdgeNetwork
-from Triangulation import Triangulation
+from Triangulation import IntrinsicTriangulation
 import numpy as np
 
 
 class Solver:
     def __init__(self, V, F):
         self.net = FlipEdgeNetwork()
-        self.tri = Triangulation(V, F)
+        self.tri = IntrinsicTriangulation(V, F)
         self.V = V
 
     def get_path_polyline(self):

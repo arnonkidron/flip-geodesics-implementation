@@ -9,10 +9,20 @@ import ViewPreferences as prefer
 
 
 class BaseTriangulation:
+    """
+    A base class for IntrinsicTriangulation, ExtrinsicTriangulation.
+
+    :field V: the vertices coordinates
+    :field in_edges: a linked-list graph of triangulation edges. For each
+    vertex v, we maintain a list of its in-edges, i.e. edges whose dst is v.
+    """
     def __init__(self, V):
         self.V = V
         self.in_edges = [[] for _ in range(len(self.V))]
 
+    #############################################
+    # computing the angle between 2 edges ab, bc
+    #############################################
     def get_wedge_angle(self, a, b, c):
         """
         from left, i.e. the clockwise angle
@@ -39,6 +49,9 @@ class BaseTriangulation:
     def get_wedge_angle_counterclockwise(self, a, b, c):
         return self.get_wedge_angle(c, b, a)
 
+    ###################################
+    # adding, removing & finding edges
+    ###################################
     def add_edge(self, e, dst=None):
         if dst is None:
             dst = e.dst
@@ -59,6 +72,9 @@ class BaseTriangulation:
         self.in_edges[v].remove(e)
         self.in_edges[u].remove(e.twin)
 
+    ############################
+    # iterating over all edges
+    ############################
     def all_edges(self):
         for v in range(len(self.in_edges)):
             for e in self.in_edges[v]:
@@ -66,6 +82,9 @@ class BaseTriangulation:
                 if u < v:
                     yield e
 
+    ############################
+    # iterating over all faces
+    ############################
     @staticmethod
     def edges_in_face(e):
         while not e.was_visited():
@@ -86,6 +105,9 @@ class BaseTriangulation:
                     continue
                 yield self.edges_in_face(e)
 
+    #################
+    #   Dijkstra
+    #################
     def find_shortest_path(self, src, dst):
         num_v = len(self.V)
         d = np.ones(num_v) * np.inf
@@ -123,8 +145,18 @@ class BaseTriangulation:
         return path
 
 
-class Triangulation(BaseTriangulation):
+class IntrinsicTriangulation(BaseTriangulation):
+    """
+    A triangulation over mesh vertices
+
+    :field mesh: the extrinsic triangulation
+    :field num_colors: for the coloring of the triangulation, for rendering
+    """
     def __init__(self, V, F):
+        """
+        Input: a mesh, in shared-vertex representation
+        Output: the intrinsic triangulation that coincides with the mesh, before any flips
+        """
         super().__init__(V)
         self.mesh = ExtrinsicTriangulation(self.V)
         self.insert_mesh_edges(F)
@@ -149,7 +181,7 @@ class Triangulation(BaseTriangulation):
 
                 length = np.linalg.norm(self.V[dst] - self.V[origin])
                 twin = self.get_edge(dst, origin)
-                e = HalfEdge(twin, origin, length)
+                e = IntrinsicHalfEdge(twin, origin, length)
                 sides.append(e)
                 self.add_edge(e, dst)
 
@@ -164,9 +196,12 @@ class Triangulation(BaseTriangulation):
             # add to mesh as well
             self.mesh.add_triangle(sides)
 
+    ###############
+    #  edge flips
+    ###############
     def construct_triangle_for_flip(self, twin, prev, next, angle):
         length = get_side_length(next.length, prev.length, angle)
-        curr = HalfEdge(twin, prev.dst, length)
+        curr = IntrinsicHalfEdge(twin, prev.dst, length)
 
         prev.set_next(curr)
         curr.set_next(next)
@@ -233,6 +268,9 @@ class Triangulation(BaseTriangulation):
         #     self.flip(e)
         pass
 
+    ##############
+    #  rendering
+    ##############
     def get_poly_data(self, mesh, need_extrinsic_faces=True):
         V = deepcopy(self.V)
         E = []
@@ -314,6 +352,10 @@ class Triangulation(BaseTriangulation):
                 new_edge.mark_visited()
             self.set_coloring(self.edges_in_face(next))
 
+    #############
+    # printing
+    #############
+
     def print(self):
         num_V = len(self.in_edges)
         for v in range(num_V):
@@ -339,10 +381,17 @@ class Triangulation(BaseTriangulation):
 
 
 class ExtrinsicTriangulation(BaseTriangulation):
+    """
+    A triangulation that describes the mesh's shape
+    """
     def __init__(self, V):
         super().__init__(V)
 
     def add_triangle(self, sides):
+        """
+        Input: an array of 3 IntrinsicHalfEdge objects that coincide to the extrinsic half-edges
+        Result: the extrinsic half-edges are added to the extrinsic triangulation
+        """
         edges = [sides[i].to_extrinsic(self.V) for i in range(3)]
         for i in range(3):
             e = edges[i]

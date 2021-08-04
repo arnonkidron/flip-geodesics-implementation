@@ -40,6 +40,9 @@ class PathShortener:
                 self.path[i-1],
             ) for i in range(len(path) - 2, 0, -1)
         ]
+
+        tmp = [self.tri.get_edge(path[i], path[i+1]) for i in range(len(path) - 1)]
+
         self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
 
     def set_loop(self, path):
