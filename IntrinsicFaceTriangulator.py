@@ -1,5 +1,6 @@
 import numpy as np
 import ViewPreferences as prefer
+from exceptions import *
 
 
 class IntrinsicFaceTriangulator:
@@ -65,7 +66,7 @@ class IntrinsicFaceTriangulator:
 
         if raise_not_found_exception \
                 and not prefer.COMPUTE_INTERSECTION_POINTS_ONE_AT_A_TIME:
-            raise "Rendering failure"
+            raise IntersectionNotFoundException()
 
     def compute_edges(self):
         for (x, y) in self.matched_vertices:

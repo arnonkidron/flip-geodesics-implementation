@@ -308,9 +308,12 @@ class IntrinsicTriangulation(BaseTriangulation):
                     F.append(points)
                     coloring.append(face_color)
                 else:
-                    faces, num = self.get_extrinsic_faces(e, intrinsic_face=points[1:])
-                    F.append(faces)
-                    coloring.extend([face_color] * num)
+                    try:
+                        faces, num = self.get_extrinsic_faces(e, intrinsic_face=points[1:])
+                        F.append(faces)
+                        coloring.extend([face_color] * num)
+                    finally:
+                        pass
 
         E = np.hstack(E)
         F = np.hstack(F)
@@ -411,7 +414,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
         for e in self.all_edges():
             e.init_face_angle()
 
-    def get_intersection_complete_search(self, line_start, line_vec, search_source):
+    def get_intersection_complete_search(self, line_start, line_vecs, search_source):
         NUM_EDGE_LIMIT = 200
         DISTANCE_LIMIT = 2
         num_edge_count = 0
@@ -436,9 +439,11 @@ class ExtrinsicTriangulation(BaseTriangulation):
             e.mark_visited()
             twin.mark_visited()
 
-            intersection = e.get_intersection(line_start, line_vec)
-            if intersection is not None:
-                candidates.append(intersection)
+            for line_vec in line_vecs:
+                intersection = e.get_intersection(line_start, line_vec)
+                if intersection is not None:
+                    intersection.distance_from_face_center = np.linalg.norm(intersection.coords - trinagle_center)
+                    candidates.append(intersection)
 
             next_priority = priority + 1
             if next_priority <= DISTANCE_LIMIT and num_edge_count < NUM_EDGE_LIMIT:
@@ -451,8 +456,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
         if len(candidates) == 0:
             return None
         print("------------- Successful complete search ------------")
-        # return min(candidates, key=lambda x: x.error)
-        return min(candidates, key=lambda x: np.linalg.norm(x.coords - trinagle_center))
+        return min(candidates, key=lambda x: x.distance_from_face_center)
 
 
 

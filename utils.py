@@ -1,4 +1,4 @@
-from math import acos, cos, sin, sqrt, pi
+from math import acos, cos, sin, sqrt, pi, fabs
 import numpy as np
 from NumericErrorThresholds import *
 
@@ -111,5 +111,5 @@ def get_closest_point(start_A, vec_A, start_B, vec_B):
     t1, t2, t3 = np.linalg.solve(lhs, rhs)
 
     point_on_A = start_A + vec_A * t1
-    distance = t3 / np.linalg.norm(vec_C)
+    distance = fabs(t3) / np.linalg.norm(vec_C)
     return point_on_A, distance

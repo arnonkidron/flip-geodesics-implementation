@@ -217,12 +217,12 @@ class IntrinsicHalfEdge(BaseHalfEdge):
             if len(candidates) == 1:
                 intersection = candidates[0]
             elif len(candidates) > 1:
-                intersection = min(candidates, key=lambda x: x.error)
+                intersection = min(candidates, key=lambda x: x.distance_from_mesh_edge)
             elif len(candidates) == 0:
                 intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
-                if intersection is not None \
-                        and intersection.error > INTERSECTION_THRESHOLD:
-                    intersection = None
+                # if intersection is not None \
+                #         and intersection.error > INTERSECTION_THRESHOLD:
+                #     intersection = None
 
             if intersection is None:
                 self.intersections_status = self.Status.FAILED
@@ -250,7 +250,7 @@ class IntrinsicHalfEdge(BaseHalfEdge):
             prev_intersection = intersection
 
             yield intersection
-            if intersection.mesh_edge.is_point_in_face(dst):
+            if mesh_edges[0].is_point_in_face(dst):
                 break
 
         self.intersections_status = self.Status.FINISHED
@@ -312,6 +312,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         self.origin_coords = origin_coords
         self.vec = dst_coords - origin_coords
         self.face_normal = None
+        self.triangle_center = None
         self.mesh_face_angle = None
 
     def get_face_normal(self):
@@ -326,10 +327,14 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         return self.face_normal
 
     def get_triangle_center(self):
-        return (self.origin_coords
-                + self.next.origin_coords
-                + self.next.next.origin_coords) \
-               / 3
+        if self.triangle_center is None:
+            self.triangle_center = (
+                    self.origin_coords
+                    + self.next.origin_coords
+                    + self.next.next.origin_coords) \
+                / 3
+
+        return self.triangle_center
 
     def init_face_angle(self):
         angle = get_angle_between(
@@ -341,7 +346,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         self.twin.mesh_face_angle = angle
 
     def get_intersection(self, line_start, line_vec):
-        intersection, error = get_closest_point(self.origin_coords, self.vec, line_start, line_vec)
+        intersection, distance = get_closest_point(self.origin_coords, self.vec, line_start, line_vec)
 
         # make sure that it is within the line segment
         diff = intersection - self.origin_coords
@@ -350,9 +355,9 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
                 continue
             t = diff[i] / self.vec[i]
             if not 0 <= t:
-                error = np.linalg.norm(intersection - self.origin_coords)
+                distance = np.linalg.norm(intersection - self.origin_coords)
             elif not t <= 1:
-                error = np.linalg.norm(intersection - self.next.origin_coords)
+                distance = np.linalg.norm(intersection - self.next.origin_coords)
 
         # make sure that it is in front of line_start
         diff = intersection - line_start
@@ -366,7 +371,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         if count_dissonances >= 2:
             return None
 
-        return Intersection(intersection, self, error, line_vec)
+        return Intersection(intersection, self, distance, line_vec)
 
     def is_point_in_face(self, point, counter=0):
         if counter == 3:
@@ -379,13 +384,19 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
 
 
 class Intersection:
-    def __init__(self, coords, mesh_edge=None, error=None, in_vec=None, out_vec=None, is_fake=False):
+    def __init__(self, coords, mesh_edge=None, distance_from_mesh_edge=None, in_vec=None, out_vec=None, is_fake=False):
         self.coords = coords
         self.mesh_edge = mesh_edge
-        self.error = error
+        self.distance_from_mesh_edge = distance_from_mesh_edge
+        self.distance_from_face_center = None if self.mesh_edge is None else \
+            np.linalg.norm(self.coords - self.mesh_edge.get_face_normal())
         self.in_vec = in_vec
         self.out_vec = out_vec
         self.is_fake = is_fake
+
+    @property
+    def error(self):
+        return self.distance_from_face_center
 
     def get_next_edges(self):
         return [
@@ -406,5 +417,5 @@ class Intersection:
 
     def test_is_vec_on_face(self):
         n = self.mesh_edge.get_face_normal()
-        for vec in self.get_out_vectors():
-            print(np.dot(vec / np.linalg.norm(vec), n))
+        dot_products = [np.dot(vec / np.linalg.norm(vec), n) for vec in self.get_out_vectors()]
+        print(dot_products)
