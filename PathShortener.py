@@ -76,7 +76,7 @@ class PathShortener:
         # insert bypass to replace it
         if not is_forth:
             bypass.reverse()
-            b_index += 1
+            # b_index += 1
         self.path[b_index:b_index] = bypass[1:-1]
 
         if self.is_loop:
