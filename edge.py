@@ -228,8 +228,8 @@ class IntrinsicHalfEdge(BaseHalfEdge):
                 self.intersections_status = self.Status.FAILED
                 self.twin.init_intersections(mesh)
                 if self.twin.intersections_status == self.Status.FINISHED:
-                    self.twin.intersection_status = self.Status.TWIN_FINISHED
-                    self.twin.intersections = []
+                    self.intersections_status = self.Status.TWIN_FINISHED
+                    self.intersections = []
                 else:
                     self.print("----------", " Both twins failed-----------")
                     # add another point, above the previous one, in order to show the path
