@@ -284,19 +284,19 @@ class IntrinsicTriangulation(BaseTriangulation):
                 points.append(e.origin)
 
                 intersections = e.get_intersections(mesh)
-                if e.intersections_status == e.Status.FAILED:
-                    is_face_failed = True
-                    if not prefer.SHOW_FAILED_TRIANGULATION_EDGES:
-                        # add the points added so far to E, and start a new one
-                        points.extend(points[-1:0:-1])
-                        points[0] = len(points) - 1
-                        E.append(points)
-                        points = [None]
-                elif len(intersections) > 0:
+                if len(intersections) > 0:
                     index_begin = len(V)
                     V = np.vstack((V, [p.coords for p in intersections]))
                     index_end = len(V)
                     points.extend(list(range(index_begin, index_end)))
+                if e.intersections_status == e.Status.FAILED:
+                    is_face_failed = True
+                    if not prefer.SHOW_FAILED_TRIANGULATION_EDGES:
+                        # add the points added so far to E, and start a new one
+                        points.extend(points[-2:0:-1])
+                        points[0] = len(points) - 1
+                        E.append(points)
+                        points = [None]
 
             points[0] = len(points) - 1
             E.append(points)
