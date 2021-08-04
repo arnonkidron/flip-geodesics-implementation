@@ -388,11 +388,17 @@ class Scene:
         yield True
 
         for intersection in e.get_intersections(self.tri.mesh):
-            if e.intersections_status != e.Status.UNINITIALIZED:
+            # if e.intersections_status != e.Status.UNINITIALIZED:
+            #     break
+            if intersection.is_fake:
                 break
-            arrow = pv.Arrow(intersection.coords, intersection.out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
+
             point = pv.PolyData(intersection.coords)
             self.plotter.add_mesh(point, name='intersection', color=prefer.PICKED_INTERSECTION_POINTS_COLOR, render_points_as_spheres=True, point_size=prefer.PATH_POINT_SIZE)
+
+            arrows = pv.PolyData()
+            for out_vec in intersection.get_out_vectors():
+                arrows += pv.Arrow(intersection.coords, out_vec, tip_radius=0.25, shaft_radius=0.10, scale='auto')
             self.plotter.add_mesh(arrow, name='vecs', color='SpringGreen')
             yield True
 
@@ -469,8 +475,19 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(1875)
     # scene.path_picker.on_close_loop()
 
-    scene.on_pick_by_index(1772)
-    scene.on_pick_by_index(2086)
+    # scene.on_pick_by_index(2069)
+    # scene.on_pick_by_index(2094)
+    # scene.on_flip_out()
+    # scene.on_flip_out()
+    # scene.on_make_geodesic()
+
+    scene.on_pick_by_index(1747)
+    scene.on_pick_by_index(1873)
+    scene.on_make_geodesic()
+
+    #TODO:
+    # scene.on_pick_by_index(1063)
+    # scene.on_pick_by_index(936)
 
     scene.show()
 

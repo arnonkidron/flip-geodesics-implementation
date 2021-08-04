@@ -201,27 +201,27 @@ class IntrinsicHalfEdge(BaseHalfEdge):
 
         # initial values
         prev_intersection = Intersection(self.near_mesh_edge.origin_coords)
-        vec = self.get_first_segment_vector()
-        e1 = self.get_first_intersecting_mesh_edge()
-        e2 = e1
+        vecs = [self.get_first_segment_vector()]
+        mesh_edges = [self.get_first_intersecting_mesh_edge()]
 
         while len(self.intersections) < 200:
-            # try both edges
-            candidate1 = e1.get_intersection(prev_intersection.coords, vec)
-            candidate2 = e2.get_intersection(prev_intersection.coords, vec)
+            # try both edges, and both vectors
+            intersection = None
+            candidates = []
+            for e in mesh_edges:
+                for vec in vecs:
+                    candidate = e.get_intersection(prev_intersection.coords, vec)
+                    if candidate is not None:
+                        candidates.append(candidate)
 
-            if False and candidate1 is None and candidate2 is None:
-                intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vec, e1)
-                # if intersection is not None \
-                #         and intersection.error > INTERSECTION_THRESHOLD:
-                #     intersection = None
-            elif candidate1 is None:
-                intersection = candidate2
-            elif candidate2 is None:
-                intersection = candidate1
-            else:
-                intersection = min(candidate1, candidate2, key=lambda x: x.error)
-                if intersection.error > INTERSECTION_THRESHOLD:
+            if len(candidates) == 1:
+                intersection = candidates[0]
+            elif len(candidates) > 1:
+                intersection = min(candidates, key=lambda x: x.error)
+            elif len(candidates) == 0:
+                intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
+                if intersection is not None \
+                        and intersection.error > INTERSECTION_THRESHOLD:
                     intersection = None
 
             if intersection is None:
@@ -242,26 +242,15 @@ class IntrinsicHalfEdge(BaseHalfEdge):
                 yield None; return
 
             self.intersections.append(intersection)
-            # yield intersection
 
-            e = intersection.mesh_edge.twin
-            # if e.is_point_in_face(dst):
-            #     yield tmp
-            #     break
+            vecs = intersection.get_out_vectors()
+            mesh_edges = intersection.get_next_edges()
 
+            prev_intersection.out_vec = intersection.in_vec
             prev_intersection = intersection
-            vec = rotate(vec, 2 * pi - e.mesh_face_angle, e.vec)
-            e1 = e.next
-            e2 = e1.next
-
-            intersection.out_vec = vec
-            intersection.in_vec = prev_intersection.out_vec
-
-            # n = e.get_face_normal()
-            # print(np.dot(vec / np.linalg.norm(vec), n))
 
             yield intersection
-            if e.is_point_in_face(dst):
+            if intersection.mesh_edge.is_point_in_face(dst):
                 break
 
         self.intersections_status = self.Status.FINISHED
@@ -272,19 +261,15 @@ class IntrinsicHalfEdge(BaseHalfEdge):
     def get_intersections(self, mesh):
         if self.intersections_status == self.Status.UNINITIALIZED:
             self.init_intersections(mesh)
-            return self.intersections
-        elif self.intersections_status == self.Status.FINISHED:
-            return self.intersections
-        elif self.intersections_status == self.Status.TWIN_FINISHED:
-            return np.flipud(self.twin.get_intersections(mesh))
-        elif self.intersections_status == self.Status.FAILED:
-            return self.intersections
 
+        if self.intersections_status == self.Status.TWIN_FINISHED:
+            return np.flipud(self.twin.get_intersections(mesh))
+
+        return self.intersections
 
     ##############
     #    printing
     ##############
-
     def print(self, prefix="", suffix=""):
         name = "{}->{}".format(self.origin, self.dst)
         print(prefix, name, suffix)
@@ -381,7 +366,7 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         if count_dissonances >= 2:
             return None
 
-        return Intersection(intersection, self, error)
+        return Intersection(intersection, self, error, line_vec)
 
     def is_point_in_face(self, point, counter=0):
         if counter == 3:
@@ -394,11 +379,32 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
 
 
 class Intersection:
-    def __init__(self, coords, mesh_edge=None, error=None, out_vec=None, is_fake=False):
+    def __init__(self, coords, mesh_edge=None, error=None, in_vec=None, out_vec=None, is_fake=False):
         self.coords = coords
         self.mesh_edge = mesh_edge
         self.error = error
+        self.in_vec = in_vec
         self.out_vec = out_vec
         self.is_fake = is_fake
 
+    def get_next_edges(self):
+        return [
+            self.mesh_edge.twin.next,
+            self.mesh_edge.twin.next.next,
+        ]
 
+    def get_out_vectors(self):
+        if self.out_vec is not None:
+            return [self.out_vec]
+
+        if self.mesh_edge is None or self.in_vec is None:
+            return []
+
+        out_vec1 = rotate(self.in_vec, self.mesh_edge.mesh_face_angle, self.mesh_edge.vec)
+        out_vec2 = rotate(self.in_vec, 2 * pi - self.mesh_edge.mesh_face_angle, self.mesh_edge.vec)
+        return [out_vec1, out_vec2]
+
+    def test_is_vec_on_face(self):
+        n = self.mesh_edge.get_face_normal()
+        for vec in self.get_out_vectors():
+            print(np.dot(vec / np.linalg.norm(vec), n))
