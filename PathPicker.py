@@ -11,7 +11,7 @@ class PathVisualizer:
         self.fixed_points_actor = None
         self.indices = []
         self.whole_path_indices = []
-        self.fixed_positions = []
+        self.fixed_indices = []
 
         self.roi = None
 
@@ -27,6 +27,9 @@ class PathVisualizer:
         self.kwargs.setdefault('pickable', False)
         self.kwargs.setdefault('reset_camera', False)
         self.kwargs.setdefault('name', '_result_path')
+
+        self.fixed_points_kwargs = {'color': prefer.NETWORK_FIXED_POINTS_COLOR, 'point_size': self.kwargs['point_size'],
+                                    'render_points_as_spheres': True, 'pickable': False, 'name': '_fixed_points'}
 
         self.show_path = prefer.SHOW_RESULT_PATH
         self.show_path_end_points = prefer.SHOW_RESULT_PATH_END_POINTS
@@ -78,11 +81,14 @@ class PathVisualizer:
 
     def remove_actor(self):
         self.scene.plotter.remove_actor(self.kwargs['name'])
+        self.scene.plotter.remove_actor(self.fixed_points_kwargs['name'])
 
     def clear(self):
         self.path_actor = pv.PolyData()
+        self.roi = None
         self.indices = []
         self.whole_path_indices = []
+        self.fixed_indices = []
         self.remove_actor()
 
     def init_path_vertices(self):
@@ -90,6 +96,7 @@ class PathVisualizer:
         first_point = self.scene.V[self.first_index]
         self.path_actor = pv.PolyData([last_point, first_point])
         self.fixed_points_actor = pv.PolyData()
+        self.fixed_points = []
         self.whole_path_indices = [self.first_index]
         self.roi = ROI.VERTEX
 
@@ -108,7 +115,7 @@ class PathVisualizer:
             self.roi = ROI.NETWORK
             for new_index in common_vertices:
                 if new_index in self.whole_path_indices[:prev_len]:
-                    self.fixed_positions.append(new_index)
+                    self.fixed_indices.append(new_index)
                     self.fixed_points_actor += pv.PolyData(self.scene.tri.V[new_index])
 
         # add to actor
@@ -167,6 +174,7 @@ class PathVisualizer:
 
     def reconstruct_by_indices(self):
         if self.is_empty():
+            self.clear()
             return
 
         self.path_actor = pv.PolyData()
@@ -210,9 +218,9 @@ class PathPicker(PathVisualizer):
         self.scene.plotter.add_mesh(self.path_actor, **kwargs)
 
         if self.fixed_points_actor.n_points > 0:
-            self.scene.plotter.add_mesh(self.fixed_points_actor,
-                                    name='_fixed_points', render_points_as_spheres=True,
-                                    color=prefer.NETWORK_FIXED_POINTS_COLOR, point_size=self.kwargs['point_size'])
+            self.scene.plotter.add_mesh(self.fixed_points_actor, **self.fixed_points_kwargs)
+        else:
+            self.scene.plotter.remove_actor(self.fixed_points_kwargs['name'])
 
     def set_path(self, path):
         self.indices = path
