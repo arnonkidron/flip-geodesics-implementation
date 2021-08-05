@@ -13,6 +13,9 @@ def get_angle(len1, len2, len3):
     arg = (len1 * len1 + len2 * len2 - len3 * len3) / (2.0 * len1 * len2)
     if arg > 1:
         arg = 1
+    elif arg < -1:
+        arg = -1
+
     return acos(arg)
 
 

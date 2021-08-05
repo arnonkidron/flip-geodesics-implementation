@@ -363,8 +363,8 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         diff = intersection - line_start
         count_dissonances = 0
         for i in range(3):
-            # if isclose(line_vec[i], 0, abs_tol=1e-02):
-            #     continue
+            if isclose(line_vec[i], 0, abs_tol=1e-02):
+                continue
             t = diff[i] / line_vec[i]
             if not(0 <= t):
                 count_dissonances += 1

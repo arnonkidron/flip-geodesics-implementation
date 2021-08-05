@@ -128,7 +128,7 @@ class Scene:
             self.plotter.add_point_labels(self.mesh_actor, range(self.mesh_actor.n_points),
                                            font_size=10)
 
-        self.plotter.remove_actor(mesh_kwargs['name'])
+        # self.plotter.remove_actor(mesh_kwargs['name'])
         self.plotter.add_mesh(self.mesh_actor, **mesh_kwargs)
 
         if prefer.SHOW_UNDERLYING_MESH_FACES:
@@ -187,8 +187,8 @@ class Scene:
             'cmap': prefer.TRIANGULATION_FACES_COLOR_MAP,
         }
 
-        self.plotter.remove_actor(tri_edge_kwargs['name'])
-        self.plotter.remove_actor(tri_face_kwargs['name'])
+        # self.plotter.remove_actor(tri_edge_kwargs['name'])
+        # self.plotter.remove_actor(tri_face_kwargs['name'])
         if prefer.SHOW_TRIANGULATION_EDGES:
             self.plotter.add_mesh(self.tri_edge_actor, **tri_edge_kwargs)
 
@@ -199,10 +199,11 @@ class Scene:
 
     def set_up_events(self):
         bindings = {
-            prefer.KEY_EVENT_SINGLE_SOURCE_DIJKSTRA: self.on_single_source,
             prefer.KEY_EVENT_MAKE_GEODESIC: self.on_make_geodesic,
             prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
             prefer.KEY_EVENT_EDGE_FLIP: self.on_edge_flip,
+            prefer.KEY_EVENT_SINGLE_SOURCE_DIJKSTRA: self.on_single_source,
+            prefer.KEY_EVENT_DELAUNAY: self.on_delaunay,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
@@ -232,6 +233,14 @@ class Scene:
             return
 
         pass
+
+    def on_delaunay(self):
+        excluded_edges = self.path_picker.get_path_edge_tuples_set().union(
+            self.result_path.get_path_edge_tuples_set()
+        )
+
+        self.tri.delaunay(excluded_edges)
+        self.add_intrinsic_triangulation()
 
     def on_make_geodesic(self):
         path = self.path_picker.whole_path_indices
@@ -388,7 +397,7 @@ class Scene:
             return
 
         arrows = pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
-        self.plotter.remove_actor('vecs')
+        # self.plotter.remove_actor('vecs')
         self.plotter.add_mesh(arrows, name='vecs', color='SpringGreen')
         yield True
 
@@ -487,50 +496,6 @@ if __name__ == '__main__':
     # scene.on_make_geodesic()
 
 
-
-
-    scene.on_clear()
-    scene.on_pick_by_index(1742)
-    scene.on_pick_by_index(1743)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1734)
-    scene.on_pick_by_index(1743)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1834)
-    scene.on_pick_by_index(1744)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1734)
-    scene.on_pick_by_index(1744)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1742)
-    scene.on_pick_by_index(1744)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1874)
-    scene.on_pick_by_index(1835)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1834)
-    scene.on_pick_by_index(1835)
-    scene.on_edge_flip()
-
-    scene.on_clear()
-    scene.on_pick_by_index(1742)
-    scene.on_pick_by_index(1835)
-    # scene.on_edge_flip()
-
-
-
     # scene.on_pick_by_index(1741)
     # scene.on_pick_by_index(1875)
     # scene.on_make_geodesic()
@@ -540,4 +505,6 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(936)
 
     scene.show()
+
+    print("Done")
 

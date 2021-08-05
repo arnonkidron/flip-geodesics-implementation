@@ -10,6 +10,8 @@ class PathVisualizer:
         self.indices = []
         self.whole_path_indices = []
 
+        self.is_loop = False
+
         self.scene = scene
 
         self.kwargs = kwargs
@@ -43,6 +45,17 @@ class PathVisualizer:
     def get_path(self):
         return self.indices
 
+    def get_path_edge_tuples_set(self):
+        if self.is_empty():
+            return set()
+
+        tuples = [(self.whole_path_indices[i], self.whole_path_indices[i+1]) for i in range(len(self.whole_path_indices) - 1)]
+        if self.is_loop:
+            tuples.append((self.whole_path_indices[-1], self.whole_path_indices[0]))
+
+        tuples.extend([(v, u) for (u, v) in tuples])
+        return set(tuples)
+
     def set_path(self, path):
         self.indices = path
 
@@ -50,8 +63,8 @@ class PathVisualizer:
         self.set_path([e.origin, e.dst])
 
     def add_actor(self):
-        self.remove_actor()
         if not self.show_path or self.is_empty():
+            self.remove_actor()
             return
 
         self.reconstruct_by_indices()
@@ -161,11 +174,9 @@ class PathPicker(PathVisualizer):
             show_message=False,
         )
 
-        self.is_loop = False
-
     def add_actor(self):
-        self.remove_actor()
         if not self.show_path:
+            self.remove_actor()
             return
 
         kwargs = self.kwargs.copy()

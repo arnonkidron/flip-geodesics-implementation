@@ -31,8 +31,7 @@ class BaseTriangulation:
         e2 = self.get_edge(b, c)
 
         if e1 is None or e2 is None:
-            print("The vertices {}->{}->{} do not form a 2-path".format(a, b, c))
-            return None
+            raise NonExistentWedgeException(a, b, c)
 
         if e1 == e2:
             return 0
@@ -258,15 +257,72 @@ class IntrinsicTriangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
-        old_edge.print2("Flipped into", e)
+        # old_edge.print2("Flipped into", e)
         return e
 
     def delaunay(self, excluded_edges):
-        # flag = False
-        # while not flag:
-        #     e = min()
-        #     self.flip(e)
-        pass
+        edge_generator = self.all_edges()
+        more_edges_to_check = []
+        while True:
+            # get the next edge
+            try:
+                e = next(edge_generator)
+            except StopIteration:
+                if len(more_edges_to_check) == 0:
+                    break
+                edge_generator = (e for e in more_edges_to_check)
+                more_edges_to_check = []
+                continue
+
+            # skip excluded edges
+            if (e.origin, e.dst) in excluded_edges:
+                continue
+            
+            # find the minimal angle in the two adjacent triangles, at the moment
+            triangle_1_prev = e.next
+            triangle_2_prev = e.twin.next
+
+            triangle_1_next = triangle_2_prev.next
+            triangle_2_next = triangle_1_prev.next
+            min_actual_angle = min([
+                e.corner_angle,
+                e.twin.corner_angle,
+                triangle_1_prev.corner_angle,
+                triangle_2_prev.corner_angle,
+                triangle_1_next.corner_angle,
+                triangle_2_next.corner_angle,
+            ])
+
+            # find the minimal angle in the two adjacent triangles, as it would be after the flip
+            triangle_1_angle = e.twin.corner_angle + triangle_1_prev.corner_angle
+            triangle_2_angle = e.corner_angle + triangle_2_prev.corner_angle
+            new_edge_length = get_side_length(triangle_1_next.length, triangle_1_prev.length, triangle_1_angle)
+
+            new_edge_1_angle = get_angle(triangle_1_prev.length, new_edge_length, triangle_1_next.length)
+            next_edge_1_angle = get_angle(new_edge_length, triangle_1_next.length, triangle_1_prev.length)
+            new_edge_2_angle = get_angle(triangle_2_prev.length, new_edge_length, triangle_2_next.length)
+            next_edge_2_angle = get_angle(new_edge_length, triangle_2_next.length, triangle_2_prev.length)
+
+            min_post_flip_angle = min([
+                triangle_1_angle,
+                new_edge_1_angle,
+                next_edge_1_angle,
+                triangle_2_angle,
+                new_edge_2_angle,
+                next_edge_2_angle,
+            ])
+
+            if min_post_flip_angle > min_actual_angle + REFLEX_ANGLE_THRESHOLD:
+                try:
+                    self.flip(e)
+                    more_edges_to_check.extend([
+                        triangle_1_prev,
+                        triangle_1_next,
+                        triangle_2_prev,
+                        triangle_2_next,
+                    ])
+                except TriangulationException:
+                    pass
 
     ##############
     #  rendering
@@ -312,7 +368,7 @@ class IntrinsicTriangulation(BaseTriangulation):
                         faces, num = self.get_extrinsic_faces(e, intrinsic_face=points[1:])
                         F.append(faces)
                         coloring.extend([face_color] * num)
-                    finally:
+                    except TriangulationException:
                         pass
 
         E = np.hstack(E)
