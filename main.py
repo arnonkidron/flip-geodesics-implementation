@@ -232,7 +232,8 @@ class Scene:
         if idx is None:
             return
 
-        pass
+        self.path_shortener.make_single_source_geodesic(idx)
+        self.add_intrinsic_triangulation()
 
     def on_delaunay(self):
         excluded_edges = self.path_picker.get_path_edge_tuples_set().union(
@@ -498,6 +499,13 @@ if __name__ == '__main__':
     #TODO:
     # scene.on_pick_by_index(1063)
     # scene.on_pick_by_index(936)
+
+    scene.on_pick_by_index(2096)
+
+    center_of_mass = np.ndarray.mean(scene.tri.V, axis=0)
+    actor = pv.PolyData(center_of_mass)
+
+    scene.plotter.add_mesh(actor, render_points_as_spheres=True, point_size=50)
 
     scene.show()
 

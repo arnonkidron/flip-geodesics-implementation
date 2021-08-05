@@ -41,8 +41,7 @@ class PathShortener:
             ) for i in range(len(path) - 2, 0, -1)
         ]
 
-        tmp = [self.tri.get_edge(path[i], path[i+1]) for i in range(len(path) - 1)]
-
+        # should be computed lazily
         self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
 
     def set_loop(self, path):
@@ -68,7 +67,7 @@ class PathShortener:
         ]
         self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
 
-    def update_path(self, b_index, is_forth, bypass):
+    def update_path(self, b_index, bypass, is_forth):
         # remove b
         b_index = b_index % len(self.path)
         del self.path[b_index]
@@ -79,22 +78,17 @@ class PathShortener:
             # b_index += 1
         self.path[b_index:b_index] = bypass[1:-1]
 
+        # could be made more efficient
         if self.is_loop:
             self.set_loop(self.path)
         else:
             self.set_path(self.path)
 
-    def flipout(self, b_index):
+    def flipout(self, a, b, c):
         """
-        :arg b_index: the index of the vertex that we would like to flip out,
-        i.e. have self.path bypass it
+        :arg a, b, c: the wedge that we would like to bypass, to replace with a shorter path a->...->c
         :return bypass: the path that bypasses b
         """
-        if b_index >= 0:
-            a, b, c = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
-        else:
-            c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
-
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
         if is_reflex_or_flat(wedge_angle):
             raise WedgeReflexAngleException(wedge_angle)
@@ -151,17 +145,20 @@ class PathShortener:
         else:
             min_index, min_angle, is_forth = min_index_back, min_angle_back, False
 
-        # b_index is the index of the middle vertex of the wedge
+        # find the vertices
         b_index = min_index + 1
-        if not is_forth:
+        if is_forth:
+            a, b, c = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
+        else:
             b_index = -b_index - 1
+            c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
 
         if is_reflex_or_flat(min_angle):
             self.is_geodesic = True
             return self.path
 
-        bypass = self.flipout(b_index)
-        self.update_path(b_index, is_forth, bypass)
+        bypass = self.flipout(a, b, c)
+        self.update_path(b_index, bypass, is_forth)
 
         return self.path
 
@@ -171,7 +168,7 @@ class PathShortener:
         iteration = 0
         while not self.is_geodesic:
             if limit_iterations is not None \
-                    and iteration < limit_iterations:
+                    and iteration > limit_iterations:
                 break
             iteration += 1
 
@@ -184,7 +181,87 @@ class PathShortener:
 
         return self.path
 
-    def make_single_source_geodesic(self, src, limit_iterations=None, length_threshold=None):
+    def set_tree(self, src, parent):
+        self.path = []
+        self.is_loop = False
+        self.is_geodesic = False
+
+        num_v = len(self.tri.V)
+
+        self.wedge_angles_forth = [
+            (v,
+                self.tri.get_wedge_angle(
+                    v,
+                    parent[v],
+                    parent[parent[v]],
+                )
+            ) for v in range(num_v) if src not in [v, parent[v]]
+        ]
+        self.wedge_angles_back = [
+            (v,
+                self.tri.get_wedge_angle(
+                    parent[parent[v]],
+                    parent[v],
+                    v,
+                )
+            ) for v in range(num_v) if src not in [v, parent[v]]
+        ]
+
+    def update_tree(self, bypass, is_forth):
+        if not is_forth:
+            bypass.reverse()
+
+        pass
+
+    def flipout_the_minimal_wedge_in_tree(self, parent):
+        if len(self.path) < 3:
+            self.is_geodesic = True
+            return self.path
+
+        # find minimal wedge
+        min_vertex_forth, min_angle_forth = min(self.wedge_angles_forth)
+        min_vertex_back, min_angle_back = min(self.wedge_angles_back)
+
+        if min_angle_forth < min_angle_back:
+            min_vertex, min_angle, is_forth = min_vertex_forth, min_angle_forth, True
+        else:
+            min_vertex, min_angle, is_forth = min_vertex_back, min_angle_back, False
+
+        if is_reflex_or_flat(min_angle):
+            self.is_geodesic = True
+            return self.path
+
+        # find the vertices
+        if is_forth:
+            a, b, c = min_vertex, parent[min_vertex], parent[parent[min_vertex]]
+        else:
+            c, b, a = min_vertex, parent[min_vertex], parent[parent[min_vertex]]
+
+        bypass = self.flipout(a, b, c)
+
+        # update tree
+        self.update_tree(bypass, is_forth)
+
+        return self.path
+
+    def make_single_source_geodesic(self, src, limit_iterations=100, length_threshold=None):
         _, parent = self.tri.dijkstra_distance_and_tree(src)
+        self.set_tree(src, parent)
+
+        iteration = 0
+        while not self.is_geodesic:
+            if limit_iterations is not None \
+                    and iteration > limit_iterations:
+                break
+            iteration += 1
+
+            self.flipout_the_minimal_wedge_in_tree(parent)
+            _, parent = self.tri.dijkstra_distance_and_tree(src)
+            self.set_tree(src, parent)
+
+        print("Done 100 iterations")
+
+
+
 
 

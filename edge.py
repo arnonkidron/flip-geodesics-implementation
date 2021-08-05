@@ -221,18 +221,23 @@ class IntrinsicHalfEdge(BaseHalfEdge):
             elif len(candidates) == 0:
                 intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
                 # if intersection is not None \
-                #         and intersection.error > INTERSECTION_THRESHOLD:
+                #         and intersection.distance_from_mesh_edge > INTERSECTION_THRESHOLD:
                 #     intersection = None
 
             if intersection is None:
                 self.intersections_status = self.Status.FAILED
+
+                # let the twin try his luck
                 self.twin.init_intersections(mesh)
                 if self.twin.intersections_status == self.Status.FINISHED:
+                    # if he succeeds - no failure, take his intersections
                     self.intersections_status = self.Status.TWIN_FINISHED
                     self.intersections = []
                 else:
                     self.print("----------", " Both twins failed-----------")
-                    # add another point, above the previous one, in order to show the path
+                    # we couldn't compute the intersection points properly
+                    # now we need to make it look nice for rendering
+                    # add another point, above the previous one, in order to make the path go above the mesh
                     e = prev_intersection.mesh_edge
                     normal = e.get_face_normal() + e.twin.get_face_normal()
                     normal /= np.linalg.norm(normal)

@@ -305,6 +305,7 @@ class IntrinsicTriangulation(BaseTriangulation):
         Turns the triangulation into a Delaunay triangulation, by flipping any illegal edge
         :arg excluded_edges: a set of edges that will not be flipped
         """
+        is_any_edge_flipped = False
         edge_generator = self.all_edges()
         more_edges_to_check = []
         while True:
@@ -360,8 +361,12 @@ class IntrinsicTriangulation(BaseTriangulation):
                         triangle_2_prev,
                         triangle_2_next,
                     ])
+                    is_any_edge_flipped = True
                 except TriangulationException:
                     pass
+
+        if not is_any_edge_flipped:
+            return self.delaunay(excluded_edges)
 
     ##############
     #  rendering
