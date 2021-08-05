@@ -1,88 +1,28 @@
-from exceptions import *
 from Triangulation import *
 import numpy as np
-from utils import is_reflex_or_flat
+from utils import is_reflex_or_flat, ROI
 
 
-class PathShortener:
+def get_shortener(mode, triangulation):
+        if mode == ROI.PATH:
+            return PathShortener(triangulation)
+        elif mode == ROI.LOOP:
+            return LoopShortener(triangulation)
+        elif mode == ROI.NETWORK:
+            return
+        elif mode == ROI.SINGLE_SRC:
+            return
+
+
+class BaseShortener:
     def __init__(self, triangulation):
         self.tri = triangulation
-        self.path = []
-        self.is_loop = None
-        self.is_geodesic = None
+        self.is_geodesic = False
 
         self.length = 0
+
         self.wedge_angles_forth = []
         self.wedge_angles_back = []
-
-    def get_path(self):
-        return self.path
-
-    def get_vertex(self, idx):
-        return self.path[idx % len(self.path)]
-
-    def set_path(self, path):
-        self.path = path
-        self.is_loop = False
-        self.is_geodesic = len(path) <= 2
-
-        self.wedge_angles_forth = [
-            self.tri.get_wedge_angle(
-                self.path[i-1],
-                self.path[i],
-                self.path[i+1],
-            ) for i in range(1, len(path) - 1)
-        ]
-        self.wedge_angles_back = [
-            self.tri.get_wedge_angle(
-                self.path[i+1],
-                self.path[i],
-                self.path[i-1],
-            ) for i in range(len(path) - 2, 0, -1)
-        ]
-
-        # should be computed lazily
-        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
-
-    def set_loop(self, path):
-        if path[-1] == path[0]:
-            path.pop()
-        self.path = path
-        self.is_loop = True
-        self.is_geodesic = len(path) <= 1
-
-        self.wedge_angles_forth = [
-            self.tri.get_wedge_angle(
-                self.get_vertex(i-1),
-                self.get_vertex(i),
-                self.get_vertex(i+1),
-            ) for i in range(1, len(path) - 1 + 2)
-        ]
-        self.wedge_angles_back = [
-            self.tri.get_wedge_angle(
-                self.get_vertex(i+1),
-                self.get_vertex(i),
-                self.get_vertex(i-1),
-            ) for i in range(len(path) - 2, 0 - 2, -1)
-        ]
-        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
-
-    def update_path(self, b_index, bypass, is_forth):
-        # remove b
-        b_index = b_index % len(self.path)
-        del self.path[b_index]
-
-        # insert bypass to replace it
-        if not is_forth:
-            bypass.reverse()
-            # b_index += 1
-        self.path[b_index:b_index] = bypass[1:-1]
-
-        # could be made more efficient
-        if self.is_loop:
-            self.set_loop(self.path)
-        else:
-            self.set_path(self.path)
 
     def flipout(self, a, b, c):
         """
@@ -129,6 +69,81 @@ class PathShortener:
         return bypass
 
     def flipout_the_minimal_wedge_in_path(self):
+        pass
+
+    def make_geodesic(self, limit_iterations=None, length_threshold=None):
+        if self.is_geodesic:
+            return
+
+        initial_length = self.length
+
+        iteration = 0
+        while not self.is_geodesic:
+            if limit_iterations is not None \
+                    and iteration > limit_iterations:
+                break
+            iteration += 1
+
+            self.flipout_the_minimal_wedge_in_path()
+
+            if length_threshold is not None:
+                current_length = self.length
+                if current_length / initial_length <= length_threshold:
+                    break
+
+
+class PathShortener(BaseShortener):
+    def __init__(self, triangulation):
+        super().__init__(triangulation)
+        self.path = []
+        self.is_geodesic = None
+
+        self.wedge_angles_forth = []
+        self.wedge_angles_back = []
+
+    def get_path(self):
+        return self.path
+
+    def get_vertex(self, idx):
+        return self.path[idx % len(self.path)]
+
+    def set_path(self, path):
+        self.path = path
+        self.is_geodesic = len(path) <= 2
+
+        self.wedge_angles_forth = [
+            self.tri.get_wedge_angle(
+                self.path[i-1],
+                self.path[i],
+                self.path[i+1],
+            ) for i in range(1, len(path) - 1)
+        ]
+        self.wedge_angles_back = [
+            self.tri.get_wedge_angle(
+                self.path[i+1],
+                self.path[i],
+                self.path[i-1],
+            ) for i in range(len(path) - 2, 0, -1)
+        ]
+
+        # should be computed lazily?
+        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
+
+    def update_path(self, b_index, bypass, is_forth):
+        # remove b
+        b_index = b_index % len(self.path)
+        del self.path[b_index]
+
+        # insert bypass to replace it
+        if not is_forth:
+            bypass.reverse()
+            # b_index += 1
+        self.path[b_index:b_index] = bypass[1:-1]
+
+        # could be made more efficient
+        self.set_path(self.path)
+
+    def flipout_the_minimal_wedge_in_path(self):
         if len(self.path) < 3:
             self.is_geodesic = True
             return self.path
@@ -162,28 +177,12 @@ class PathShortener:
 
         return self.path
 
-    def make_geodesic(self, limit_iterations=None, length_threshold=None):
-        initial_length = self.length
 
-        iteration = 0
-        while not self.is_geodesic:
-            if limit_iterations is not None \
-                    and iteration > limit_iterations:
-                break
-            iteration += 1
-
-            self.flipout_the_minimal_wedge_in_path()
-
-            if length_threshold is not None:
-                current_length = self.length
-                if current_length / initial_length <= length_threshold:
-                    break
-
-        return self.path
-
+    ################
+    # move to SingleSourceShortener
+    ################
     def set_tree(self, src, parent):
         self.path = []
-        self.is_loop = False
         self.is_geodesic = False
 
         num_v = len(self.tri.V)
@@ -214,9 +213,8 @@ class PathShortener:
         pass
 
     def flipout_the_minimal_wedge_in_tree(self, parent):
-        if len(self.path) < 3:
-            self.is_geodesic = True
-            return self.path
+        if self.is_geodesic:
+            return
 
         # find minimal wedge
         min_vertex_forth, min_angle_forth = min(self.wedge_angles_forth)
@@ -244,7 +242,7 @@ class PathShortener:
 
         return self.path
 
-    def make_single_source_geodesic(self, src, limit_iterations=100, length_threshold=None):
+    def make_single_source_geodesic(self, src, limit_iterations=None, length_threshold=None):
         _, parent = self.tri.dijkstra_distance_and_tree(src)
         self.set_tree(src, parent)
 
@@ -256,12 +254,46 @@ class PathShortener:
             iteration += 1
 
             self.flipout_the_minimal_wedge_in_tree(parent)
+
             _, parent = self.tri.dijkstra_distance_and_tree(src)
             self.set_tree(src, parent)
 
-        print("Done 100 iterations")
+        print("Done {} iterations".format(limit_iterations))
 
 
+class LoopShortener(PathShortener):
+    def __init__(self, triangulation):
+        super().__init__(triangulation)
 
+    def get_path(self):
+        if self.path[0] != self.path[-1]:
+            self.path.append(self.path[0])
+        return self.path
 
+    def set_path(self, path):
+        if path[-1] == path[0]:
+            path.pop()
+        self.path = path
+        self.is_geodesic = len(path) <= 1
+
+        self.wedge_angles_forth = [
+            self.tri.get_wedge_angle(
+                self.get_vertex(i-1),
+                self.get_vertex(i),
+                self.get_vertex(i+1),
+            ) for i in range(1, len(path) - 1 + 2)
+        ]
+        self.wedge_angles_back = [
+            self.tri.get_wedge_angle(
+                self.get_vertex(i+1),
+                self.get_vertex(i),
+                self.get_vertex(i-1),
+            ) for i in range(len(path) - 2, 0 - 2, -1)
+        ]
+        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
+
+    def flipout_the_minimal_wedge_in_path(self):
+        super().flipout_the_minimal_wedge_in_path()
+        if len(self.path) == 2 and len(self.tri.get_all_edges_between(self.path[0], self.path[1])) == 1:
+            self.path.pop()
 

@@ -2,15 +2,18 @@ import pyvista as pv
 import ViewPreferences as prefer
 import exceptions
 import numpy as np
+from utils import ROI
 
 
 class PathVisualizer:
     def __init__(self, scene, **kwargs):
         self.path_actor = None
+        self.fixed_points_actor = None
         self.indices = []
         self.whole_path_indices = []
+        self.fixed_positions = []
 
-        self.is_loop = False
+        self.roi = None
 
         self.scene = scene
 
@@ -28,6 +31,7 @@ class PathVisualizer:
         self.show_path = prefer.SHOW_RESULT_PATH
         self.show_path_end_points = prefer.SHOW_RESULT_PATH_END_POINTS
         self.show_path_all_points = prefer.SHOW_RESULT_PATH_ALL_POINTS
+        self.show_network_fixed_points = prefer.SHOW_NETWORK_FIXED_POINTS
 
     def is_empty(self):
         if self.indices is None:
@@ -50,7 +54,7 @@ class PathVisualizer:
             return set()
 
         tuples = [(self.whole_path_indices[i], self.whole_path_indices[i+1]) for i in range(len(self.whole_path_indices) - 1)]
-        if self.is_loop:
+        if self.roi == ROI.LOOP:
             tuples.append((self.whole_path_indices[-1], self.whole_path_indices[0]))
 
         tuples.extend([(v, u) for (u, v) in tuples])
@@ -61,6 +65,7 @@ class PathVisualizer:
 
     def set_path_as_one_edge(self, e):
         self.set_path([e.origin, e.dst])
+        self.roi = ROI.PATH
 
     def add_actor(self):
         if not self.show_path or self.is_empty():
@@ -84,13 +89,29 @@ class PathVisualizer:
         last_point = self.scene.V[self.last_index]
         first_point = self.scene.V[self.first_index]
         self.path_actor = pv.PolyData([last_point, first_point])
+        self.fixed_points_actor = pv.PolyData()
         self.whole_path_indices = [self.first_index]
+        self.roi = ROI.VERTEX
 
     def update_path_edges(self, prev_idx, current_idx):
         new_part = self.scene.tri.find_shortest_path(prev_idx, current_idx)
         self.whole_path_indices.pop()
+        common_vertices = list(set.intersection(set(self.whole_path_indices), set(new_part)))
+        prev_len = len(self.whole_path_indices)
         self.whole_path_indices.extend(new_part)
 
+        if len(common_vertices) == 0:
+            self.roi = ROI.PATH
+        elif len(common_vertices) == 1 and common_vertices[0] == self.first_index and self.roi == ROI.PATH:
+            self.roi = ROI.LOOP
+        else:
+            self.roi = ROI.NETWORK
+            for new_index in common_vertices:
+                if new_index in self.whole_path_indices[:prev_len]:
+                    self.fixed_positions.append(new_index)
+                    self.fixed_points_actor += pv.PolyData(self.scene.tri.V[new_index])
+
+        # add to actor
         V = self.scene.tri.V[new_part]
         E = [None]
         last_vertex = len(V) - 1
@@ -102,6 +123,10 @@ class PathVisualizer:
 
             if self.scene.slow_edge is not None:
                 continue
+
+            if self.roi == ROI.LOOP and len(self.indices) == 3:
+                # parallel edges, now we must choose the other one
+                e = self.scene.tri.get_all_edges_between(new_part[i], new_part[i+1])[-1]
 
             intersections = e.get_intersections(self.scene.tri.mesh)
             if e.intersections_status != e.Status.FAILED \
@@ -183,6 +208,11 @@ class PathPicker(PathVisualizer):
         if len(self.indices) == 1 and self.is_intersection_point(self.last_index):
                 kwargs['color'] = prefer.PICKED_INTERSECTION_POINTS_COLOR
         self.scene.plotter.add_mesh(self.path_actor, **kwargs)
+
+        if self.fixed_points_actor.n_points > 0:
+            self.scene.plotter.add_mesh(self.fixed_points_actor,
+                                    name='_fixed_points', render_points_as_spheres=True,
+                                    color=prefer.NETWORK_FIXED_POINTS_COLOR, point_size=self.kwargs['point_size'])
 
     def set_path(self, path):
         self.indices = path

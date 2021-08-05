@@ -1,11 +1,6 @@
 import pyvista as pv
-import numpy as np
 from tkinter import Tk, messagebox, simpledialog
 from tkinter.filedialog import askopenfilename
-from FlipEdgeNetwork import *
-from Triangulation import *
-from edge import *
-from Solver import *
 from PathPicker import *
 from PathShortener import *
 import ViewPreferences as prefer
@@ -33,7 +28,6 @@ class Scene:
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
-        self.path_shortener = PathShortener(self.tri)
         self.path_picker = PathPicker(self)
         self.text_actor = None
         self.set_up_events()
@@ -227,12 +221,13 @@ class Scene:
 
         self.path_picker.on_pick(self.V[idx])
 
-    def on_single_source(self):
+    def on_single_source(self, limit_iterations=None):
         idx = self.path_picker.get_single_point_index()
         if idx is None:
             return
 
-        self.path_shortener.make_single_source_geodesic(idx)
+        shortener = PathShortener(self.tri)
+        shortener.make_single_source_geodesic(idx, limit_iterations=limit_iterations)
         self.add_intrinsic_triangulation()
 
     def on_delaunay(self):
@@ -244,24 +239,27 @@ class Scene:
         self.add_intrinsic_triangulation()
 
     def on_make_geodesic(self):
-        path = self.path_picker.whole_path_indices
-        if self.path_picker.is_loop:
-            self.path_shortener.set_loop(path)
-        else:
-            self.path_shortener.set_path(path)
+        path = deepcopy(self.path_picker.whole_path_indices)
+        shortener = get_shortener(self.path_picker.roi, self.tri)
+        shortener.set_path(path)
 
         try:
-            new_path = self.path_shortener.make_geodesic()
+            shortener.make_geodesic()
+            new_path = shortener.get_path()
             self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
         except TriangulationException as err:
             return self.warn(title="MakeGeodesic fail", msg=str(err))
 
     def on_flip_out(self):
-        path = self.path_picker.whole_path_indices
-        self.path_shortener.set_path(path)
+        if self.result_path.is_empty():
+            path = deepcopy(self.path_picker.whole_path_indices)
+        else:
+            path = self.result_path.whole_path_indices
+        shortener = PathShortener(self.tri)
+        shortener.set_path(path)
 
         try:
-            new_path = self.path_shortener.flipout_the_minimal_wedge_in_path()
+            new_path = shortener.flipout_the_minimal_wedge_in_path()
             self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
         except TriangulationException as err:
             return self.warn(title="FlipOut fail", msg=str(err))
@@ -500,12 +498,9 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(1063)
     # scene.on_pick_by_index(936)
 
-    scene.on_pick_by_index(2096)
+    # scene.on_pick_by_index(2096)
 
-    center_of_mass = np.ndarray.mean(scene.tri.V, axis=0)
-    actor = pv.PolyData(center_of_mass)
-
-    scene.plotter.add_mesh(actor, render_points_as_spheres=True, point_size=50)
+    # scene.on_single_source(5000)
 
     scene.show()
 

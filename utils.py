@@ -1,6 +1,19 @@
 from math import acos, cos, sin, sqrt, pi, fabs
 import numpy as np
 from NumericErrorThresholds import *
+from enum import Enum
+
+
+###############################
+#  an enum for selection mode
+###############################
+class ROI(Enum):
+    VERTEX = 1
+    EDGE = 2
+    PATH = 3
+    LOOP = 4
+    NETWORK = 5
+
 
 ################################################
 # the cosine theorem for angles and side lengths

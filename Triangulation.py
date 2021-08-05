@@ -61,6 +61,13 @@ class BaseTriangulation:
             if e.origin == origin:
                 return e
 
+    def get_all_edges_between(self, origin, dst):
+        output = []
+        for e in self.in_edges[dst]:
+            if e.origin == origin:
+                output.append(e)
+        return output
+
     def remove_edge_by(self, origin, dst):
         e = self.get_edge(origin, dst)
         self.in_edges[dst].remove(e)
