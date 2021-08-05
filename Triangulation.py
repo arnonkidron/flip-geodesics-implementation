@@ -107,7 +107,50 @@ class BaseTriangulation:
     #################
     #   Dijkstra
     #################
-    def find_shortest_path(self, src, dst):
+    def find_shortest_path(self, src, dst, parent=None):
+        """
+        :return: the shortest edge path from src to dst
+        If the right edge flips were performed, then this path would be a geodesic;
+        Otherwise it is a good approximation for the geodesic.
+        :arg parent: (optional) the result of a previously conducted dijkstra search
+        """
+        if parent is None:
+            _, parent = self.dijkstra_distance_and_tree(src)
+
+        path = []
+        v = dst
+        while v != src:
+            path.append(v)
+            v = parent[v]
+            if v is None:
+                return None
+        path.append(src)
+        path.reverse()
+        return path
+
+    # probably unneeded
+    def find_all_shortest_paths(self, src):
+        """
+        :arg src: a source vertex
+        :return: the set of all shortests paths
+        """
+        _, parent = self.dijkstra_distance_and_tree(src)
+
+        # find the leaves of the search tree
+        num_v = len(self.V)
+        parents_set = set(parent)
+        leaves = [v for v in range(num_v) if v not in parents_set]
+
+        # return the set of paths to leaves
+        output = [self.find_shortest_path(src, leaf, parent) for leaf in leaves]
+        return output
+
+    def dijkstra_distance_and_tree(self, src):
+        """
+        :arg src: the source vertex from which we begin the Dijkstra search
+        :return distance: for each vertex, its distance from src
+        :return parent: for each vertex, the previous node on its shortest path from src
+        """
         num_v = len(self.V)
         d = np.ones(num_v) * np.inf
         visited = np.zeros(num_v, dtype=bool)
@@ -132,16 +175,7 @@ class BaseTriangulation:
                     parent[u] = v
                     q.put((d[u], u))
 
-        path = []
-        v = dst
-        while v != src:
-            path.append(v)
-            v = parent[v]
-            if v is None:
-                return None
-        path.append(src)
-        path.reverse()
-        return path
+        return d, parent
 
 
 class IntrinsicTriangulation(BaseTriangulation):
@@ -232,6 +266,12 @@ class IntrinsicTriangulation(BaseTriangulation):
         return self.flip(e)
 
     def flip(self, old_edge):
+        """
+        edge flip - replacing old_edge by the other diagonal of its quadrilateral
+
+        :except ReflexAngleException: cannot flip because the quadrilateral is non-convex
+        :except LowDegreeVertexException: cannot flip because the edge has an endpoint of degree 1
+        """
         triangle_1_prev = old_edge.next
         triangle_2_prev = old_edge.twin.next
 
@@ -261,6 +301,10 @@ class IntrinsicTriangulation(BaseTriangulation):
         return e
 
     def delaunay(self, excluded_edges):
+        """
+        Turns the triangulation into a Delaunay triangulation, by flipping any illegal edge
+        :arg excluded_edges: a set of edges that will not be flipped
+        """
         edge_generator = self.all_edges()
         more_edges_to_check = []
         while True:
@@ -281,7 +325,6 @@ class IntrinsicTriangulation(BaseTriangulation):
             # find the minimal angle in the two adjacent triangles, at the moment
             triangle_1_prev = e.next
             triangle_2_prev = e.twin.next
-
             triangle_1_next = triangle_2_prev.next
             triangle_2_next = triangle_1_prev.next
             min_actual_angle = min([
@@ -297,22 +340,18 @@ class IntrinsicTriangulation(BaseTriangulation):
             triangle_1_angle = e.twin.corner_angle + triangle_1_prev.corner_angle
             triangle_2_angle = e.corner_angle + triangle_2_prev.corner_angle
             new_edge_length = get_side_length(triangle_1_next.length, triangle_1_prev.length, triangle_1_angle)
-
             new_edge_1_angle = get_angle(triangle_1_prev.length, new_edge_length, triangle_1_next.length)
             next_edge_1_angle = get_angle(new_edge_length, triangle_1_next.length, triangle_1_prev.length)
             new_edge_2_angle = get_angle(triangle_2_prev.length, new_edge_length, triangle_2_next.length)
             next_edge_2_angle = get_angle(new_edge_length, triangle_2_next.length, triangle_2_prev.length)
 
             min_post_flip_angle = min([
-                triangle_1_angle,
-                new_edge_1_angle,
-                next_edge_1_angle,
-                triangle_2_angle,
-                new_edge_2_angle,
-                next_edge_2_angle,
+                triangle_1_angle, new_edge_1_angle, next_edge_1_angle,
+                triangle_2_angle, new_edge_2_angle, next_edge_2_angle,
             ])
 
-            if min_post_flip_angle > min_actual_angle + REFLEX_ANGLE_THRESHOLD:
+            # flip if illegal
+            if min_post_flip_angle > min_actual_angle + 1e-09:
                 try:
                     self.flip(e)
                     more_edges_to_check.extend([

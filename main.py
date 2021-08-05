@@ -249,10 +249,6 @@ class Scene:
         else:
             self.path_shortener.set_path(path)
 
-        # while not self.path_shortener.is_geodesic:
-        #     self.on_flip_out()
-        # return
-
         try:
             new_path = self.path_shortener.make_geodesic()
             self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
@@ -264,7 +260,7 @@ class Scene:
         self.path_shortener.set_path(path)
 
         try:
-            new_path = self.path_shortener.flipout_the_minimal_wedge()
+            new_path = self.path_shortener.flipout_the_minimal_wedge_in_path()
             self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
         except TriangulationException as err:
             return self.warn(title="FlipOut fail", msg=str(err))
@@ -428,7 +424,6 @@ class Scene:
         self.slow_generator = None
         self.slow_edge = None
 
-
     def on_clear(self):
         self.path_picker.clear()
         self.result_path.clear()
@@ -505,6 +500,4 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(936)
 
     scene.show()
-
-    print("Done")
 

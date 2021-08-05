@@ -84,11 +84,15 @@ class PathShortener:
         else:
             self.set_path(self.path)
 
-    def flipout(self, b_index, is_forth):
-        if is_forth:
+    def flipout(self, b_index):
+        """
+        :arg b_index: the index of the vertex that we would like to flip out,
+        i.e. have self.path bypass it
+        :return bypass: the path that bypasses b
+        """
+        if b_index >= 0:
             a, b, c = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
         else:
-            b_index = -b_index - 1
             c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
 
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
@@ -128,10 +132,9 @@ class PathShortener:
             if i > 1:
                 i = i - 1
 
-        # update self.path
-        self.update_path(b_index, is_forth, bypass)
+        return bypass
 
-    def flipout_the_minimal_wedge(self):
+    def flipout_the_minimal_wedge_in_path(self):
         if len(self.path) < 3:
             self.is_geodesic = True
             return self.path
@@ -150,12 +153,15 @@ class PathShortener:
 
         # b_index is the index of the middle vertex of the wedge
         b_index = min_index + 1
+        if not is_forth:
+            b_index = -b_index - 1
 
         if is_reflex_or_flat(min_angle):
             self.is_geodesic = True
             return self.path
 
-        self.flipout(b_index, is_forth)
+        bypass = self.flipout(b_index)
+        self.update_path(b_index, is_forth, bypass)
 
         return self.path
 
@@ -169,7 +175,7 @@ class PathShortener:
                 break
             iteration += 1
 
-            self.flipout_the_minimal_wedge()
+            self.flipout_the_minimal_wedge_in_path()
 
             if length_threshold is not None:
                 current_length = self.length
@@ -177,4 +183,8 @@ class PathShortener:
                     break
 
         return self.path
+
+    def make_single_source_geodesic(self, src, limit_iterations=None, length_threshold=None):
+        _, parent = self.tri.dijkstra_distance_and_tree(src)
+
 
