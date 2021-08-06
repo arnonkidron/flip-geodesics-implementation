@@ -1,7 +1,7 @@
 import pyvista as pv
 from tkinter import Tk, messagebox, simpledialog
 from tkinter.filedialog import askopenfilename
-from PathPicker import *
+from MultiplePathPicker import *
 from PathShortener import *
 import ViewPreferences as prefer
 
@@ -23,12 +23,12 @@ class Scene:
 
         self.slow_edge = None
         self.slow_generator = None
-        self.result_path = PathVisualizer(self)
+        self.result_path = MultiplePathVisualizer(self)
 
         self.add_extrinsic_mesh_actor()
         self.add_intrinsic_triangulation()
 
-        self.path_picker = PathPicker(self)
+        self.path_picker = MultiplePathPicker(self)
         self.text_actor = None
         self.set_up_events()
 
@@ -200,6 +200,7 @@ class Scene:
             prefer.KEY_EVENT_DELAUNAY: self.on_delaunay,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
+            prefer.KEY_EVENT_START_NEW_PATH: self.path_picker.on_start_new_path,
             prefer.KEY_EVENT_UNDO_PICK: self.path_picker.on_undo,
             prefer.KEY_EVENT_CLOSE_LOOP: self.path_picker.on_close_loop,
             prefer.KEY_EVENT_PICK_NEXT_EDGE: self.path_picker.on_pick_next_edge,
@@ -239,10 +240,9 @@ class Scene:
         self.add_intrinsic_triangulation()
 
     def on_make_geodesic(self):
-        path = deepcopy(self.path_picker.whole_path_indices)
         shortener = get_shortener(self.path_picker.roi, self.tri)
-        shortener.set_path(path)
-
+        path = self.path_picker.get_path()
+        shortener.set_path(deepcopy(path))
         try:
             shortener.make_geodesic()
             new_path = shortener.get_path()
@@ -252,14 +252,14 @@ class Scene:
 
     def on_flip_out(self):
         if self.result_path.is_empty():
-            path = deepcopy(self.path_picker.whole_path_indices)
+            viz = self.path_picker
         else:
-            path = self.result_path.whole_path_indices
-        shortener = PathShortener(self.tri)
-        shortener.set_path(path)
-
+            viz = self.result_path
+        shortener = get_shortener(viz.roi, self.tri)
+        shortener.set_path(deepcopy(viz.get_path()))
         try:
-            new_path = shortener.flipout_the_minimal_wedge_in_path()
+            shortener.flipout_the_minimal_wedge()
+            new_path = shortener.get_path()
             self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
         except TriangulationException as err:
             return self.warn(title="FlipOut fail", msg=str(err))
@@ -287,7 +287,6 @@ class Scene:
             return self.on_clear()
 
         self.result_path.set_path(path)
-        self.result_path.reconstruct_by_indices()
 
         if what_to_show == prefer.Show.ONLY_THE_RESULT:
             self.on_pick_result_path()
@@ -318,13 +317,13 @@ class Scene:
             self.show_edge_first_vec(e)
 
         if msg is None:
-            path = self.path_picker.get_path()
-            msg = "Path "
-            for v in path:
-                msg += str(v)
-                msg += "->"
+            for path in self.path_picker.get_path():
+                msg = "Path "
+                for v in path:
+                    msg += str(v)
+                    msg += "->"
 
-            msg = msg[:-2]
+                msg = msg[:-2]
 
         if msg is None:
             self.text_actor = None
@@ -440,7 +439,7 @@ class Scene:
 
 
 if __name__ == '__main__':
-    scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+    scene = Scene('C:\\Users\\Arnon\\Desktop\\eight.obj')
     # scene = Scene()
     # scene.on_pick_by_index(1733)
     # scene.on_pick_by_index(1870)
@@ -498,9 +497,13 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(1063)
     # scene.on_pick_by_index(936)
 
-    # scene.on_pick_by_index(2096)
+    scene.on_pick_by_index(4)
+    scene.on_pick_by_index(22)
+    scene.on_flip_out()
+    scene.on_make_geodesic()
 
-    # scene.on_single_source(5000)
 
     scene.show()
+
+
 

@@ -219,7 +219,8 @@ class IntrinsicHalfEdge(BaseHalfEdge):
             elif len(candidates) > 1:
                 intersection = min(candidates, key=lambda x: x.distance_from_mesh_edge)
             elif len(candidates) == 0:
-                intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
+                intersection = None
+                # intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
                 # if intersection is not None \
                 #         and intersection.distance_from_mesh_edge > INTERSECTION_THRESHOLD:
                 #     intersection = None

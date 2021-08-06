@@ -8,12 +8,8 @@ from utils import ROI
 class PathVisualizer:
     def __init__(self, scene, **kwargs):
         self.path_actor = None
-        self.fixed_points_actor = None
         self.indices = []
         self.whole_path_indices = []
-        self.fixed_indices = []
-
-        self.roi = None
 
         self.scene = scene
 
@@ -28,13 +24,9 @@ class PathVisualizer:
         self.kwargs.setdefault('reset_camera', False)
         self.kwargs.setdefault('name', '_result_path')
 
-        self.fixed_points_kwargs = {'color': prefer.NETWORK_FIXED_POINTS_COLOR, 'point_size': self.kwargs['point_size'],
-                                    'render_points_as_spheres': True, 'pickable': False, 'name': '_fixed_points'}
-
         self.show_path = prefer.SHOW_RESULT_PATH
         self.show_path_end_points = prefer.SHOW_RESULT_PATH_END_POINTS
         self.show_path_all_points = prefer.SHOW_RESULT_PATH_ALL_POINTS
-        self.show_network_fixed_points = prefer.SHOW_NETWORK_FIXED_POINTS
 
     def is_empty(self):
         if self.indices is None:
@@ -49,8 +41,19 @@ class PathVisualizer:
     def last_index(self):
         return self.indices[-1]
 
+    @property
+    def roi(self):
+        if self.is_empty():
+            return None
+        elif len(self.indices) == 1:
+            return ROI.VERTEX
+        elif self.first_index == self.last_index:
+            return ROI.LOOP
+        else:
+            return ROI.PATH
+
     def get_path(self):
-        return self.indices
+        return self.whole_path_indices
 
     def get_path_edge_tuples_set(self):
         if self.is_empty():
@@ -65,10 +68,10 @@ class PathVisualizer:
 
     def set_path(self, path):
         self.indices = path
+        self.reconstruct_by_indices()
 
     def set_path_as_one_edge(self, e):
         self.set_path([e.origin, e.dst])
-        self.roi = ROI.PATH
 
     def add_actor(self):
         if not self.show_path or self.is_empty():
@@ -81,42 +84,23 @@ class PathVisualizer:
 
     def remove_actor(self):
         self.scene.plotter.remove_actor(self.kwargs['name'])
-        self.scene.plotter.remove_actor(self.fixed_points_kwargs['name'])
 
     def clear(self):
         self.path_actor = pv.PolyData()
-        self.roi = None
         self.indices = []
         self.whole_path_indices = []
-        self.fixed_indices = []
         self.remove_actor()
 
     def init_path_vertices(self):
         last_point = self.scene.V[self.last_index]
         first_point = self.scene.V[self.first_index]
         self.path_actor = pv.PolyData([last_point, first_point])
-        self.fixed_points_actor = pv.PolyData()
-        self.fixed_points = []
         self.whole_path_indices = [self.first_index]
-        self.roi = ROI.VERTEX
 
     def update_path_edges(self, prev_idx, current_idx):
         new_part = self.scene.tri.find_shortest_path(prev_idx, current_idx)
         self.whole_path_indices.pop()
-        common_vertices = list(set.intersection(set(self.whole_path_indices), set(new_part)))
-        prev_len = len(self.whole_path_indices)
         self.whole_path_indices.extend(new_part)
-
-        if len(common_vertices) == 0:
-            self.roi = ROI.PATH
-        elif len(common_vertices) == 1 and common_vertices[0] == self.first_index and self.roi == ROI.PATH:
-            self.roi = ROI.LOOP
-        else:
-            self.roi = ROI.NETWORK
-            for new_index in common_vertices:
-                if new_index in self.whole_path_indices[:prev_len]:
-                    self.fixed_indices.append(new_index)
-                    self.fixed_points_actor += pv.PolyData(self.scene.tri.V[new_index])
 
         # add to actor
         V = self.scene.tri.V[new_part]
@@ -217,11 +201,6 @@ class PathPicker(PathVisualizer):
                 kwargs['color'] = prefer.PICKED_INTERSECTION_POINTS_COLOR
         self.scene.plotter.add_mesh(self.path_actor, **kwargs)
 
-        if self.fixed_points_actor.n_points > 0:
-            self.scene.plotter.add_mesh(self.fixed_points_actor, **self.fixed_points_kwargs)
-        else:
-            self.scene.plotter.remove_actor(self.fixed_points_kwargs['name'])
-
     def set_path(self, path):
         self.indices = path
         self.reconstruct_by_indices()
@@ -297,9 +276,7 @@ class PathPicker(PathVisualizer):
 
         self.reconstruct_by_indices()
         self.add_actor()
-        self.scene.remove_text()
 
     def on_close_loop(self):
         self.on_pick(self.scene.tri.V[self.first_index])
-        self.is_loop = True
 

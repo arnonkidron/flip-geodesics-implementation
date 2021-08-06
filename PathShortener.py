@@ -9,7 +9,7 @@ def get_shortener(mode, triangulation):
         elif mode == ROI.LOOP:
             return LoopShortener(triangulation)
         elif mode == ROI.NETWORK:
-            return
+            return MultiplePathShortener(triangulation)
         elif mode == ROI.SINGLE_SRC:
             return
 
@@ -68,7 +68,7 @@ class BaseShortener:
 
         return bypass
 
-    def flipout_the_minimal_wedge_in_path(self):
+    def flipout_the_minimal_wedge(self):
         pass
 
     def make_geodesic(self, limit_iterations=None, length_threshold=None):
@@ -84,7 +84,7 @@ class BaseShortener:
                 break
             iteration += 1
 
-            self.flipout_the_minimal_wedge_in_path()
+            self.flipout_the_minimal_wedge()
 
             if length_threshold is not None:
                 current_length = self.length
@@ -143,15 +143,15 @@ class PathShortener(BaseShortener):
         # could be made more efficient
         self.set_path(self.path)
 
-    def flipout_the_minimal_wedge_in_path(self):
+    def get_minimal_wedge(self):
         if len(self.path) < 3:
             self.is_geodesic = True
-            return self.path
+            return None
 
         # find minimal wedge
         min_index_forth = np.argmin(self.wedge_angles_forth)
         min_index_back = np.argmin(self.wedge_angles_back)
-        
+
         min_angle_forth = self.wedge_angles_forth[min_index_forth]
         min_angle_back = self.wedge_angles_back[min_index_back]
 
@@ -159,6 +159,10 @@ class PathShortener(BaseShortener):
             min_index, min_angle, is_forth = min_index_forth, min_angle_forth, True
         else:
             min_index, min_angle, is_forth = min_index_back, min_angle_back, False
+
+        if is_reflex_or_flat(min_angle):
+            self.is_geodesic = True
+            return None
 
         # find the vertices
         b_index = min_index + 1
@@ -168,15 +172,16 @@ class PathShortener(BaseShortener):
             b_index = -b_index - 1
             c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
 
-        if is_reflex_or_flat(min_angle):
-            self.is_geodesic = True
-            return self.path
+        return a, b, c, b_index, is_forth, min_angle
+
+    def flipout_the_minimal_wedge(self):
+        params = self.get_minimal_wedge()
+        if params is None:
+            return
+        a, b, c, b_index, is_forth, _ = params
 
         bypass = self.flipout(a, b, c)
         self.update_path(b_index, bypass, is_forth)
-
-        return self.path
-
 
     ################
     # move to SingleSourceShortener
@@ -266,6 +271,8 @@ class LoopShortener(PathShortener):
         super().__init__(triangulation)
 
     def get_path(self):
+        if len(self.path) == 0:
+            return []
         if self.path[0] != self.path[-1]:
             self.path.append(self.path[0])
         return self.path
@@ -292,8 +299,27 @@ class LoopShortener(PathShortener):
         ]
         self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
 
-    def flipout_the_minimal_wedge_in_path(self):
-        super().flipout_the_minimal_wedge_in_path()
+    def flipout_the_minimal_wedge(self):
+        super().flipout_the_minimal_wedge()
         if len(self.path) == 2 and len(self.tri.get_all_edges_between(self.path[0], self.path[1])) == 1:
             self.path.pop()
+
+
+class MultiplePathShortener(BaseShortener):
+    def __init__(self, triangulation):
+        super().__init__(triangulation)
+        self.shorteners = []
+
+    def set_path(self, paths):
+        for path, roi in paths:
+            shortener = get_shortener(roi, self.tri)
+            self.shorteners.append(shortener)
+
+
+
+    # TODO: allow different shorteners to interrupt each other by flipping each other's edges
+    # when they do so, simply find the shortest path to replace the missing edge
+
+    # different idea: if different paths have common points, then let these points be fixed
+
 
