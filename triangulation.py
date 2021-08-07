@@ -4,9 +4,9 @@ import numpy as np
 from copy import deepcopy
 from utils import is_reflex_or_flat, get_side_length
 from queue import PriorityQueue
-from IntrinsicFaceTriangulator import IntrinsicFaceTriangulator
-import ViewPreferences as prefer
-from NumericErrorThresholds import FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
+from intrinsic_face_triangulator import IntrinsicFaceTriangulator
+import view_preferences as prefer
+from numeric_error_thresholds import FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
 
 class BaseTriangulation:
     """

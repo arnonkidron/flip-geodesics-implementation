@@ -1,4 +1,4 @@
-from PathPicker import *
+from path_picker import *
 
 
 class MultiplePathVisualizer:

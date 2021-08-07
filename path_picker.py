@@ -1,5 +1,5 @@
 import pyvista as pv
-import ViewPreferences as prefer
+import view_preferences as prefer
 import exceptions
 import numpy as np
 from utils import ROI

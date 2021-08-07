@@ -1,5 +1,5 @@
 import numpy as np
-import ViewPreferences as prefer
+import view_preferences as prefer
 from exceptions import *
 
 

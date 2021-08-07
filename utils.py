@@ -1,6 +1,6 @@
 from math import acos, cos, sin, sqrt, pi, fabs
 import numpy as np
-from NumericErrorThresholds import *
+from numeric_error_thresholds import *
 from enum import Enum
 
 

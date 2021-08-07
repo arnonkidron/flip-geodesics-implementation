@@ -3,7 +3,8 @@ from utils import get_angle, rotate, turn, get_closest_point, get_angle_between
 from math import isclose, pi
 from exceptions import *
 from enum import Enum
-import ViewPreferences as prefer
+import view_preferences as prefer
+from edge_intersections import *
 
 
 class BaseHalfEdge:
