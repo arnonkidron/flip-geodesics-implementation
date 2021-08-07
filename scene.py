@@ -34,6 +34,9 @@ class Scene:
         self.text_actor = None
         self.set_up_events()
 
+        self.iterations_limit = ITERATIONS_LIMIT
+        self.length_threshold = LENGTH_THRESHOLD
+
     @staticmethod
     def ask_for_url():
         # we don't want a full GUI, so keep the root window from appearing
@@ -53,13 +56,18 @@ class Scene:
         return mesh_url
 
     @staticmethod
-    def ask_for_integer(msg):
+    def ask_for_integer(**kwargs):
         tk = Tk()
         tk.withdraw()
-        answer = simpledialog.askstring(title="Input", prompt=msg, parent=tk)
-        if answer is None:
-            return None
-        return int(answer)
+        answer = simpledialog.askinteger(parent=tk, **kwargs)
+        return answer
+
+    @staticmethod
+    def ask_for_float(**kwargs):
+        tk = Tk()
+        tk.withdraw()
+        answer = simpledialog.askfloat(parent=tk, **kwargs)
+        return answer
 
     @staticmethod
     def warn(title, msg):
@@ -199,6 +207,7 @@ class Scene:
             prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
             prefer.KEY_EVENT_EDGE_FLIP: self.on_edge_flip,
             prefer.KEY_EVENT_DELAUNAY: self.on_delaunay,
+            prefer.KEY_EVENT_CONFIGURE_LIMITS: self.on_configure_limits,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
             prefer.KEY_EVENT_START_NEW_PATH: self.path_picker.on_start_new_path,
@@ -215,9 +224,34 @@ class Scene:
         for key, callback in bindings.items():
             self.plotter.add_key_event(key, callback)
 
+    def on_configure_limits(self):
+        answer = self.ask_for_integer(
+            title="Configuration",
+            prompt="Enter max num of iterations:",
+            minvalue=0,
+            initialvalue=self.iterations_limit
+        )
+        if answer is not None:
+            self.iterations_limit = answer
+
+        answer = self.ask_for_float(
+            title="Configuration",
+            prompt="Enter minimum fraction of initial length:",
+            minvalue=0,
+            maxvalue=1,
+            initialvalue=self.length_threshold
+        )
+        if answer is not None:
+            self.length_threshold = answer
+
     def on_pick_by_index(self, idx=None):
         if idx is None:
-            idx = self.ask_for_integer("Enter a vertex index to pick:")
+            self.iterations_limit = self.ask_for_integer(
+                title="Input",
+                prompt="Enter a vertex index to pick:",
+                minvalue=0,
+                maxvalue=len(self.V),
+            )
             if idx is None:
                 return
 
@@ -274,9 +308,9 @@ class Scene:
             shortener.set_path(deepcopy(path))
         except NonExistentJointException:
             # cannot redo
-            return
+            shortener.set_path(deepcopy(self.result_path.get_path()))
         try:
-            shortener.make_geodesic()
+            shortener.make_geodesic(self.iterations_limit, self.length_threshold)
             new_path = shortener.get_path()
             self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
         except TriangulationException as err:

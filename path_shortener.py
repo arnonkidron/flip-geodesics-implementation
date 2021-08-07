@@ -80,7 +80,7 @@ class BaseShortener:
     def flipout_the_minimal_wedge(self):
         pass
 
-    def make_geodesic(self, limit_iterations=None, length_threshold=None):
+    def make_geodesic(self, limit_iterations=ITERATIONS_LIMIT, length_threshold=LENGTH_THRESHOLD):
         if self.is_geodesic:
             return
 
