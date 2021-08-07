@@ -177,7 +177,8 @@ class EdgeIntersections:
         # we couldn't compute the intersection points properly. Now we go back and try other candidates
 
         # save attempt
-        score = sum([intersection.surface_error for intersection in self.points])
+        # score = sum([intersection.surface_error for intersection in self.points])
+        score = sum([np.linalg.norm(self.points[i].coords - self.points[i+1].coords) for i in range(len(self.points) - 1)])
         if self.best_attempt_score > score:
             self.best_attempt_score = score
             self.best_attempt_points = copy(self.points)

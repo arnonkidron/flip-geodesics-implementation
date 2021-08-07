@@ -37,10 +37,13 @@ class MultiplePathVisualizer:
         return [x.indices for x in self.visualizers]
 
     def set_path(self, paths, **kwargs):
+        self.visualizers = []
+        self.add_path(paths, **kwargs)
+
+    def add_path(self, paths, **kwargs):
         if not isinstance(paths[0], list):
             paths = [paths]
 
-        self.visualizers = []
         for path in paths:
             self.add_one(**kwargs)
             self.last.set_path(path)

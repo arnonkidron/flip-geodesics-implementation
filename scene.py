@@ -140,7 +140,6 @@ class Scene:
     def add_intrinsic_triangulation(self):
         # advance intersection point computation by one step
         if self.slow_generator is not None:
-
             intersection = next(self.slow_generator)
             if intersection is None:
                 self.slow_edge = None
@@ -230,7 +229,6 @@ class Scene:
             return
 
         kwargs = {
-            # 'color': prefer.TRIANGULATION_EDGE_COLOR,
             'line_width': prefer.TRIANGULATION_EDGE_WIDTH,
             'point_size': 0,
         }
@@ -239,15 +237,19 @@ class Scene:
         path = self.path_picker.get_path()
         shortener.set_path(deepcopy(path))
         try:
+            pass
             shortener.make_geodesic()
-            print("Finished computing single source geodesics successfully. Start rendering")
         except TriangulationException as err:
-            self.result_path.set_path(shortener.get_path(), **kwargs)
+            print(str(err))
+            print("Start rendering")
             self.result_path.set_path(shortener.get_frontier(), **kwargs, color='Black')
+            self.result_path.add_path(shortener.get_path(), **kwargs)
             self.add_intrinsic_triangulation()
             return self.warn(title="MakeGeodesic fail", msg=str(err))
 
+        print("Finished computing single source geodesics successfully. Start rendering")
         self.result_path.set_path(shortener.get_path(), **kwargs)
+        self.result_path.add_path([idx])
         self.add_intrinsic_triangulation()
 
     def on_delaunay(self):
