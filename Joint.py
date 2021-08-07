@@ -72,16 +72,3 @@ class Joint:
             self.e1.origin, \
             self.e2.origin, \
             self.e2.dst
-
-    #########################################
-    #  comparison operators - by wedge angle
-    #########################################
-
-    def __lt__(self, other):
-        return self.wedge_angle.__lt__(other.wedge_angle)
-
-    def __gt__(self, other):
-        return self.wedge_angle.__gt__(other.wedge_angle)
-
-    def __eq__(self, other):
-        return self.wedge_angle.__eq__(other.wedge_angle)

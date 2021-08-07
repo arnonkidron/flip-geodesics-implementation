@@ -144,11 +144,13 @@ class PathShortener(BaseShortener):
         # could be made much more efficient
         self.set_path(self.path)
 
-    def get_minimal_joint(self):
+    def get_minimal_wedge_angle(self):
         if self.is_geodesic:
-            return None
+            return np.inf
+        return self.get_minimal_joint().wedge_angle
 
-        return min(self.joints)
+    def get_minimal_joint(self):
+        return min(self.joints, key=lambda j: j.wedge_angle)
 
     def flipout_the_minimal_wedge(self):
         if self.is_geodesic:
@@ -288,20 +290,67 @@ class MultiplePathShortener(BaseShortener):
     def __init__(self, triangulation):
         super().__init__(triangulation)
         self.shorteners = []
+        self.fixed_vertices = []
+
+    def get_path(self):
+        return [shortener.get_path() for shortener in self.shorteners]
+
+    @staticmethod
+    def split_paths(paths):
+        while MultiplePathShortener.split_paths_one_at_a_time(paths):
+            pass
+
+    @staticmethod
+    def split_paths_one_at_a_time(paths):
+        for i in range(len(paths)):
+            path = paths[i]
+            for other_path in paths:
+                if path == other_path:
+                    continue
+
+                for pos in range(1, len(path) - 1):
+                    if path[pos] in other_path:
+                        path1 = path[:pos+1]
+                        path2 = path[pos:]
+                        del paths[i]
+                        if path1[0] == path2[-1]:
+                            # path was a loop
+                            path2.pop()
+                            path2.extend(path1)
+                            path2.append(None)
+                            paths.append(path2)
+                        else: # path
+                            paths.append(path1)
+                            paths.append(path2)
+                        return True
+
+        return False
 
     def set_path(self, paths):
+        # split paths that contain points from other paths
+        self.split_paths(paths)
+
+        # create lots of shorteners
         for path in paths:
-            roi = ROI.LOOP if path[0] == path[-1] else ROI.PATH
+            if path[-1] is None:
+                roi = ROI.PATH
+                path.pop()
+            else:
+                roi = ROI.LOOP if path[0] == path[-1] else ROI.PATH
             shortener = get_shortener(roi, self.tri)
+            shortener.set_path(path)
             self.shorteners.append(shortener)
-    # TODO: allow different shorteners to interrupt each other by flipping each other's edges
-    # when they do so, simply find the shortest path to replace the missing edge
 
-    # different idea: if different paths have common points, then let these points be fixed
+    def flipout_the_minimal_wedge(self):
+        if self.is_geodesic:
+            return
 
-    def make_geodesic(self, limit_iterations=None, length_threshold=None):
-        for shortener in self.shorteners:
-            print(shortener.get_path())
+        shortener = min(self.shorteners, key=lambda shortener: shortener.get_minimal_wedge_angle())
+        if shortener.is_geodesic:
+            self.is_geodesic = True
+            return
+
+        shortener.flipout_the_minimal_wedge()
 
 
 class SingleSrcShortener(BaseShortener):

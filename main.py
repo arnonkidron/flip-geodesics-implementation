@@ -360,7 +360,7 @@ class Scene:
             self.show_edge_first_vec(e)
         else:
             msg = ""
-            for path in self.path_picker.get_paths():
+            for path in self.path_picker.get_paths_for_info():
                 if len(path) == 0:
                     continue
                 if path[0] == path[-1]:
@@ -489,6 +489,15 @@ class Scene:
 
 if __name__ == '__main__':
     scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+
+    scene.on_pick_by_index(2067)
+    scene.on_pick_by_index(2097)
+    scene.on_pick_by_index(2094)
+    scene.path_picker.on_start_new_path()
+    scene.on_pick_by_index(2097)
+
+    scene.on_make_geodesic()
+
     # scene.on_pick_by_index(70)
     # scene.on_make_geodesic()
 
