@@ -3,7 +3,7 @@ from utils import rotate, turn
 from math import pi
 from enum import Enum
 import view_preferences as prefer
-from copy import deepcopy, copy
+from copy import copy
 
 
 class Intersection:
@@ -17,9 +17,6 @@ class Intersection:
         self.out_vec = out_vec
         self.is_fake = is_fake
         self.other_candidates = []
-
-    def __deepcopy__(self, memo):
-        return copy(self)
 
     @property
     def error(self):
@@ -183,7 +180,7 @@ class EdgeIntersections:
         score = sum([intersection.surface_error for intersection in self.points])
         if self.best_attempt_score > score:
             self.best_attempt_score = score
-            self.best_attempt_points = deepcopy(self.points)
+            self.best_attempt_points = copy(self.points)
 
         # backtrack
         while len(self.points) > 1:
