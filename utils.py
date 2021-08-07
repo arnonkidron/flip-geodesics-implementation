@@ -9,6 +9,7 @@ from enum import Enum
 ###############################
 class ROI(Enum):
     EMPTY = 0
+    INTERSECTION = -1
     VERTEX = 1
     EDGE = 2
     PATH = 3

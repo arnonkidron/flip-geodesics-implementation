@@ -46,11 +46,18 @@ class PathVisualizer:
         if self.is_empty():
             return ROI.EMPTY
         elif len(self.indices) == 1:
+            if self.is_intersection_point(self.first_index):
+                return ROI.INTERSECTION
             return ROI.VERTEX
+        elif len(self.whole_path_indices) == 2:
+            return ROI.EDGE
         elif self.first_index == self.last_index:
             return ROI.LOOP
         else:
             return ROI.PATH
+
+    def is_intersection_point(self, idx):
+        return idx >= self.scene.mesh_actor.n_points
 
     def get_path(self):
         return self.whole_path_indices
@@ -197,7 +204,7 @@ class PathPicker(PathVisualizer):
             return
 
         kwargs = self.kwargs.copy()
-        if len(self.indices) == 1 and self.is_intersection_point(self.last_index):
+        if self.roi == ROI.INTERSECTION:
                 kwargs['color'] = prefer.PICKED_INTERSECTION_POINTS_COLOR
         self.scene.plotter.add_mesh(self.path_actor, **kwargs)
 
@@ -235,9 +242,6 @@ class PathPicker(PathVisualizer):
             return
         self.set_path_as_one_edge(e.twin)
         self.scene.on_info()
-
-    def is_intersection_point(self, idx):
-        return idx >= self.scene.mesh_actor.n_points
 
     def on_pick(self, input_point):
         point_finder = self.scene.mesh_actor

@@ -31,7 +31,10 @@ class MultiplePathVisualizer:
         if self.is_one():
             return self.last.get_path()
         else:
-            return [x.get_path() for x in self.visualizers]
+            return self.get_paths()
+
+    def get_paths(self):
+        return [x.get_path() for x in self.visualizers]
 
     def set_path(self, paths, **kwargs):
         if not isinstance(paths[0], list):

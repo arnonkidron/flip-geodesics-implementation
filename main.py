@@ -260,7 +260,7 @@ class Scene:
         roi = self.path_picker.roi
         if roi == ROI.VERTEX:
             return self.on_single_source()
-        elif roi == ROI.EMPTY:
+        elif roi == ROI.EMPTY or roi == ROI.INTERSECTION:
             return
 
         shortener = get_shortener(roi, self.tri)
@@ -304,9 +304,10 @@ class Scene:
             return self.warn(title="FlipOut fail", msg=str(err))
 
     def on_edge_flip(self):
-        old_edge = self.path_picker.get_corresponding_edge()
-        if old_edge is None:
+        if self.path_picker.roi != ROI.EDGE:
             return
+
+        old_edge = self.path_picker.get_corresponding_edge()
         try:
             new_edge = self.tri.flip(old_edge)
         except TriangulationException as err:
@@ -321,6 +322,7 @@ class Scene:
             new_edge.init_intersections(self.tri.mesh)
 
         self.set_result([new_edge.origin, new_edge.dst], prefer.SHOW_ON_EDGE_FLIP)
+        self.remove_text()
 
     def set_result(self, path, what_to_show):
         if what_to_show == prefer.Show.NOTHING:
@@ -335,35 +337,42 @@ class Scene:
 
     def on_info(self):
         self.remove_text()
+
         msg = None
-
-        idx = self.path_picker.get_single_point_index()
-        if idx is not None:
+        roi = self.path_picker.roi
+        if roi == ROI.VERTEX:
+            idx = self.path_picker.get_single_point_index()
             coords = self.V[idx]
-            if self.path_picker.is_intersection_point(idx):
-                msg = "Intersection point\n" \
-                      "({:.4f},{:.4f},{:.4f})\n"\
-                    .format(coords[0], coords[1], coords[2])
-            else:
-                deg = len(self.tri.in_edges[idx])
-                msg = "Vertex #{}\n" \
-                      "({:.4f},{:.4f},{:.4f})\n" \
-                      "Degree {}\n"\
-                    .format(idx, coords[0], coords[1], coords[2], deg)
-
-        e = self.path_picker.get_corresponding_edge()
-        if e is not None:
+            deg = len(self.tri.in_edges[idx])
+            msg = "Vertex #{}\n" \
+                  "({:.4f},{:.4f},{:.4f})\n" \
+                  "Degree {}\n"\
+                .format(idx, coords[0], coords[1], coords[2], deg)
+        elif roi == ROI.INTERSECTION:
+            idx = self.path_picker.get_single_point_index()
+            coords = self.V[idx]
+            msg = "Intersection point\n" \
+                  "({:.4f},{:.4f},{:.4f})\n"\
+                .format(coords[0], coords[1], coords[2])
+        elif roi == ROI.EDGE:
+            e = self.path_picker.get_corresponding_edge()
             msg = e.get_info()
             self.show_edge_first_vec(e)
-
-        if msg is None:
-            for path in self.path_picker.get_path():
-                msg = "Path "
+        else:
+            msg = ""
+            for path in self.path_picker.get_paths():
+                if len(path) == 0:
+                    continue
+                if path[0] == path[-1]:
+                    msg += "Loop "
+                else:
+                    msg += "Path "
                 for v in path:
                     msg += str(v)
                     msg += "->"
 
                 msg = msg[:-2]
+                msg += "\n"
 
         if msg is None:
             self.text_actor = None
