@@ -2,6 +2,7 @@ from Triangulation import *
 import numpy as np
 from utils import is_reflex_or_flat, ROI
 from NumericErrorThresholds import *
+from Joint import Joint
 
 
 def get_shortener(mode, triangulation):
@@ -20,35 +21,32 @@ class BaseShortener:
         self.tri = triangulation
         self.is_geodesic = False
 
-        self.length = 0
-
-        self.wedge_angles_forth = []
-        self.wedge_angles_back = []
+        self.joints = []
 
         self.reflex_angle_threshold_for_edge_flip = FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
         self.reflex_angle_threshold_for_flip_out = FLAT_ANGLE_THRESHOLD_FOR_FLIP_OUT
 
-    def flipout(self, a, b, c):
+    @property
+    def length(self):
+        return 0
+
+    def flipout(self, joint):
         """
-        :arg a, b, c: the wedge that we would like to bypass, to replace with a shorter path a->...->c
+        :arg joint: the joint a->b->c that we would like to bypass, to replace with a shorter path a->...->c
         :return bypass: the path that bypasses b
+                the triangulation is modified, so it includes the bypass and it no longer includes the joint
         """
-        wedge_angle = self.tri.get_wedge_angle(a, b, c)
-        if is_reflex_or_flat(wedge_angle, self.reflex_angle_threshold_for_flip_out):
-            raise WedgeReflexAngleException(wedge_angle)
+        a, b, c = joint.vertices
 
-        # find edges of this wedge
-        e1 = self.tri.get_edge(a, b)
-        e2 = self.tri.get_edge(b, c)
-        if e1 is None or e2 is None:
-            return
+        if is_reflex_or_flat(joint.wedge_angle, self.reflex_angle_threshold_for_flip_out):
+            raise WedgeReflexAngleException(joint.wedge_angle)
 
-        if e1 == e2 or e1 == e2.twin:
+        if joint.e1 == joint.e2 or joint.e1 == joint.e2.twin:
             raise SelfEdgeException(a, b, c)
 
         # calculate bypassing path
         bypass = [a]
-        e = e1.next
+        e = joint.e1.next
         while e.dst != c:
             bypass.append(e.dst)
             e = e.twin.next
@@ -102,89 +100,67 @@ class PathShortener(BaseShortener):
         self.path = []
         self.is_geodesic = None
 
-        self.wedge_angles_forth = []
-        self.wedge_angles_back = []
-
     def get_path(self):
         return self.path
 
     def get_vertex(self, idx):
         return self.path[idx % len(self.path)]
 
+    @property
+    def length(self):
+        return np.sum([self.tri.get_edge(self.path[i], self.path[i+1]).length for i in range(len(self.path) - 1)])
+
     def set_path(self, path):
         self.path = path
         self.is_geodesic = len(path) <= 2
 
-        self.wedge_angles_forth = [
-            self.tri.get_wedge_angle(
-                self.path[i-1],
-                self.path[i],
-                self.path[i+1],
-            ) for i in range(1, len(path) - 1)
-        ]
-        self.wedge_angles_back = [
-            self.tri.get_wedge_angle(
-                self.path[i+1],
-                self.path[i],
-                self.path[i-1],
-            ) for i in range(len(path) - 2, 0, -1)
-        ]
+        if self.is_geodesic:
+            self.joints = []
+            return
 
-        # should be computed lazily?
-        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(len(path) - 1)])
+        self.joints = [
+            Joint.from_vertices(self.tri,
+                                self.path[i-1],
+                                self.path[i],
+                                self.path[i+1],
+                                i)
+            for i in range(1, len(path) - 1)
+        ]
+        self.joints.extend([j.twin for j in self.joints])
 
-    def update_path(self, b_index, bypass, is_forth):
+    def update_path(self, old_joint, bypass):
         # remove b
-        b_index = b_index % len(self.path)
+        b_index = old_joint.path_data
         del self.path[b_index]
+        if b_index < 0:
+            b_index += len(self.path) + 1
 
         # insert bypass to replace it
-        if not is_forth:
+        if not old_joint.direction == Joint.Direction.FORTH:
             bypass.reverse()
-            # b_index += 1
+
         self.path[b_index:b_index] = bypass[1:-1]
 
-        # could be made more efficient
+        # could be made much more efficient
         self.set_path(self.path)
 
-    def get_minimal_wedge_angle(self):
-        return min(
-            min(self.wedge_angles_forth),
-            min(self.wedge_angles_back),
-        )
+    def get_minimal_joint(self):
+        if self.is_geodesic:
+            return None
+
+        return min(self.joints)
 
     def flipout_the_minimal_wedge(self):
-        if len(self.path) < 3:
+        if self.is_geodesic:
+            return
+
+        joint = self.get_minimal_joint()
+        if is_reflex_or_flat(joint.wedge_angle, self.reflex_angle_threshold_for_flip_out):
             self.is_geodesic = True
-            return None
+            return
 
-        # find minimal wedge
-        min_index_forth = np.argmin(self.wedge_angles_forth)
-        min_index_back = np.argmin(self.wedge_angles_back)
-
-        min_angle_forth = self.wedge_angles_forth[min_index_forth]
-        min_angle_back = self.wedge_angles_back[min_index_back]
-
-        if min_angle_forth < min_angle_back:
-            min_index, min_angle, is_forth = min_index_forth, min_angle_forth, True
-        else:
-            min_index, min_angle, is_forth = min_index_back, min_angle_back, False
-
-        if is_reflex_or_flat(min_angle, threshold=self.reflex_angle_threshold_for_flip_out):
-            self.is_geodesic = True
-            return None
-
-        # find the vertices
-        b_index = min_index + 1
-        if is_forth:
-            a, b, c = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
-        else:
-            b_index = -b_index - 1
-            c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
-
-        # finish
-        bypass = self.flipout(a, b, c)
-        self.update_path(b_index, bypass, is_forth)
+        bypass = self.flipout(joint)
+        self.update_path(joint, bypass)
 
     ################
     # move to SingleSourceShortener
@@ -276,31 +252,31 @@ class LoopShortener(PathShortener):
     def get_path(self):
         if len(self.path) == 0:
             return []
-        if self.path[0] != self.path[-1]:
-            self.path.append(self.path[0])
-        return self.path
+        return self.path + [self.path[0]]
+
+    @property
+    def length(self):
+        return np.sum([self.tri.get_edge(self.path[i - 1], self.path[i]).length for i in range(len(self.path))])
 
     def set_path(self, path):
-        if path[-1] == path[0]:
+        if len(path) > 0 and path[0] == path[-1]:
             path.pop()
         self.path = path
         self.is_geodesic = len(path) <= 1
 
-        self.wedge_angles_forth = [
-            self.tri.get_wedge_angle(
-                self.get_vertex(i-1),
-                self.get_vertex(i),
-                self.get_vertex(i+1),
-            ) for i in range(1, len(path) - 1 + 2)
+        if self.is_geodesic:
+            self.joints = []
+            return
+
+        self.joints = [
+            Joint.from_vertices(self.tri,
+                                self.path[i - 2],
+                                self.path[i - 1],
+                                self.path[i],
+                                i - 1)
+            for i in range(len(path))
         ]
-        self.wedge_angles_back = [
-            self.tri.get_wedge_angle(
-                self.get_vertex(i+1),
-                self.get_vertex(i),
-                self.get_vertex(i-1),
-            ) for i in range(len(path) - 2, 0 - 2, -1)
-        ]
-        self.length = np.sum([self.tri.get_edge(path[i], path[i+1]).length for i in range(-1, len(path) - 1)])
+        self.joints.extend([j.twin for j in self.joints])
 
     def flipout_the_minimal_wedge(self):
         super().flipout_the_minimal_wedge()

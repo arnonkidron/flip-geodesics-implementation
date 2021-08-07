@@ -248,7 +248,6 @@ class Scene:
         self.result_path.set_path(shortener.get_path(), **kwargs)
         self.add_intrinsic_triangulation()
 
-
     def on_delaunay(self):
         excluded_edges = self.path_picker.get_path_edge_tuples_set().union(
             self.result_path.get_path_edge_tuples_set()
@@ -261,10 +260,17 @@ class Scene:
         roi = self.path_picker.roi
         if roi == ROI.VERTEX:
             return self.on_single_source()
+        elif roi == ROI.EMPTY:
+            return
 
         shortener = get_shortener(roi, self.tri)
         path = self.path_picker.get_path()
-        shortener.set_path(deepcopy(path))
+
+        try:
+            shortener.set_path(deepcopy(path))
+        except NonExistentJointException:
+            # cannot redo
+            return
         try:
             shortener.make_geodesic()
             new_path = shortener.get_path()
@@ -474,8 +480,13 @@ class Scene:
 
 if __name__ == '__main__':
     scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
-    scene.on_pick_by_index(70)
+    # scene.on_pick_by_index(70)
     # scene.on_make_geodesic()
+
+    # scene.on_pick_by_index(2087)
+    # scene.on_pick_by_index(2085)
+    # scene.on_pick_by_index(2114)
+    # scene.on_pick_by_index(2087)
 
 
     # scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')

@@ -1,7 +1,7 @@
 from enum import Enum
 
 # vertices
-LABEL_VERTICES = True
+LABEL_VERTICES = False
 
 # mesh edges vs. triangulation edges
 MESH_EDGE_WIDTH = 2

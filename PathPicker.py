@@ -44,7 +44,7 @@ class PathVisualizer:
     @property
     def roi(self):
         if self.is_empty():
-            return None
+            return ROI.EMPTY
         elif len(self.indices) == 1:
             return ROI.VERTEX
         elif self.first_index == self.last_index:
@@ -108,16 +108,16 @@ class PathVisualizer:
         last_vertex = len(V) - 1
         for i in range(last_vertex):
             E.append(i)
-            e = self.scene.tri.get_edge(new_part[i], new_part[i+1])
+            e = self.scene.tri.get_edge(new_part[i], new_part[i + 1])
             if e is None:
                 raise exceptions.NonExistentEdgeException(new_part[i], new_part[i+1])
 
             if self.scene.slow_edge is not None:
                 continue
 
-            if self.roi == ROI.LOOP and len(self.indices) == 3:
-                # parallel edges, now we must choose the other one
-                e = self.scene.tri.get_all_edges_between(new_part[i], new_part[i+1])[-1]
+            if self.roi == ROI.LOOP and len(self.indices) == 3 and prev_idx == self.first_index:
+                # the path consists of two parallel edges, so we need to pick a different one at every call
+                e = self.scene.tri.get_all_edges_between(new_part[i], new_part[i + 1])[-1]
 
             intersections = e.get_intersections(self.scene.tri.mesh)
             if e.intersections_status != e.Status.FAILED \

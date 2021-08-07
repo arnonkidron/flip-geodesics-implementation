@@ -8,6 +8,7 @@ from enum import Enum
 #  an enum for selection mode
 ###############################
 class ROI(Enum):
+    EMPTY = 0
     VERTEX = 1
     EDGE = 2
     PATH = 3

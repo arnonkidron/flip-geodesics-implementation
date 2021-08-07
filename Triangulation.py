@@ -20,34 +20,6 @@ class BaseTriangulation:
         self.V = V
         self.in_edges = [[] for _ in range(len(self.V))]
 
-    #############################################
-    # computing the angle between 2 edges ab, bc
-    #############################################
-    def get_wedge_angle(self, a, b, c):
-        """
-        from left, i.e. the clockwise angle
-        """
-        e1 = self.get_edge(a, b)
-        e2 = self.get_edge(b, c)
-
-        if e1 is None or e2 is None:
-            raise NonExistentWedgeException(a, b, c)
-
-        if e1 == e2:
-            return 0
-
-        e = e1.next
-        sum = 0
-        while e != e2:
-            sum += e.corner_angle
-            e = e.twin.next
-        sum += e.corner_angle
-
-        return sum
-
-    def get_wedge_angle_counterclockwise(self, a, b, c):
-        return self.get_wedge_angle(c, b, a)
-
     ###################################
     # adding, removing & finding edges
     ###################################
@@ -291,7 +263,7 @@ class IntrinsicTriangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
-        old_edge.print2("Flipped into", e)
+        # old_edge.print2("Flipped into", e)
         return e
 
     def delaunay(self, excluded_edges):

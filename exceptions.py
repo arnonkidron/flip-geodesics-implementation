@@ -12,10 +12,11 @@ class NonExistentEdgeException(TriangulationException):
             .format(origin, dst)
         super().__init__(msg)
 
-class NonExistentWedgeException(TriangulationException):
+
+class NonExistentJointException(TriangulationException):
     def __init__(self, a, b, c):
         msg = "The vertices {}->{}->{} " \
-              "do not form a 2-path" \
+              "do not form a path along the intrinsic triangulation edges" \
             .format(a, b, c)
         super().__init__(msg)
 
