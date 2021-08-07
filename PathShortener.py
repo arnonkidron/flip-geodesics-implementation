@@ -1,6 +1,7 @@
 from Triangulation import *
 import numpy as np
 from utils import is_reflex_or_flat, ROI
+from NumericErrorThresholds import *
 
 
 def get_shortener(mode, triangulation):
@@ -10,8 +11,8 @@ def get_shortener(mode, triangulation):
             return LoopShortener(triangulation)
         elif mode == ROI.NETWORK:
             return MultiplePathShortener(triangulation)
-        elif mode == ROI.SINGLE_SRC:
-            return
+        elif mode == ROI.VERTEX:
+            return SingleSrcShortener(triangulation)
 
 
 class BaseShortener:
@@ -24,13 +25,16 @@ class BaseShortener:
         self.wedge_angles_forth = []
         self.wedge_angles_back = []
 
+        self.reflex_angle_threshold_for_edge_flip = FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
+        self.reflex_angle_threshold_for_flip_out = FLAT_ANGLE_THRESHOLD_FOR_FLIP_OUT
+
     def flipout(self, a, b, c):
         """
         :arg a, b, c: the wedge that we would like to bypass, to replace with a shorter path a->...->c
         :return bypass: the path that bypasses b
         """
         wedge_angle = self.tri.get_wedge_angle(a, b, c)
-        if is_reflex_or_flat(wedge_angle):
+        if is_reflex_or_flat(wedge_angle, self.reflex_angle_threshold_for_flip_out):
             raise WedgeReflexAngleException(wedge_angle)
 
         # find edges of this wedge
@@ -55,7 +59,7 @@ class BaseShortener:
             to_flip_edge = self.tri.get_edge(bypass[i], b)
 
             try:
-                e = self.tri.flip(to_flip_edge)
+                self.tri.flip(to_flip_edge, flat_angle_threshold=self.reflex_angle_threshold_for_edge_flip)
             except ReflexAngleException:
                 i = i + 1
                 continue
@@ -143,7 +147,13 @@ class PathShortener(BaseShortener):
         # could be made more efficient
         self.set_path(self.path)
 
-    def get_minimal_wedge(self):
+    def get_minimal_wedge_angle(self):
+        return min(
+            min(self.wedge_angles_forth),
+            min(self.wedge_angles_back),
+        )
+
+    def flipout_the_minimal_wedge(self):
         if len(self.path) < 3:
             self.is_geodesic = True
             return None
@@ -160,7 +170,7 @@ class PathShortener(BaseShortener):
         else:
             min_index, min_angle, is_forth = min_index_back, min_angle_back, False
 
-        if is_reflex_or_flat(min_angle):
+        if is_reflex_or_flat(min_angle, threshold=self.reflex_angle_threshold_for_flip_out):
             self.is_geodesic = True
             return None
 
@@ -172,14 +182,7 @@ class PathShortener(BaseShortener):
             b_index = -b_index - 1
             c, b, a = self.get_vertex(b_index - 1), self.get_vertex(b_index), self.get_vertex(b_index + 1)
 
-        return a, b, c, b_index, is_forth, min_angle
-
-    def flipout_the_minimal_wedge(self):
-        params = self.get_minimal_wedge()
-        if params is None:
-            return
-        a, b, c, b_index, is_forth, _ = params
-
+        # finish
         bypass = self.flipout(a, b, c)
         self.update_path(b_index, bypass, is_forth)
 
@@ -230,7 +233,7 @@ class PathShortener(BaseShortener):
         else:
             min_vertex, min_angle, is_forth = min_vertex_back, min_angle_back, False
 
-        if is_reflex_or_flat(min_angle):
+        if is_reflex_or_flat(min_angle, threshold=self.reflex_angle_threshold_for_flip_out):
             self.is_geodesic = True
             return self.path
 
@@ -311,15 +314,107 @@ class MultiplePathShortener(BaseShortener):
         self.shorteners = []
 
     def set_path(self, paths):
-        for path, roi in paths:
+        for path in paths:
+            roi = ROI.LOOP if path[0] == path[-1] else ROI.PATH
             shortener = get_shortener(roi, self.tri)
             self.shorteners.append(shortener)
-
-
-
     # TODO: allow different shorteners to interrupt each other by flipping each other's edges
     # when they do so, simply find the shortest path to replace the missing edge
 
     # different idea: if different paths have common points, then let these points be fixed
+
+    def make_geodesic(self, limit_iterations=None, length_threshold=None):
+        for shortener in self.shorteners:
+            print(shortener.get_path())
+
+
+class SingleSrcShortener(BaseShortener):
+    def __init__(self, triangulation):
+        super().__init__(triangulation)
+        self.src = None
+        self.parent = None
+        self.visited = None
+        self.d = None
+        self.reflex_angle_threshold_for_edge_flip = REFLEX_ANGLE_THRESHOLD_FOR_SINGLE_SRC_GEODESICS
+        self.reflex_angle_threshold_for_flip_out = REFLEX_ANGLE_THRESHOLD_FOR_SINGLE_SRC_GEODESICS
+
+    def get_path(self):
+        if self.parent is None:
+            return [self.src]
+        return [[v, self.parent[v]] 
+                for v in range(len(self.tri.V)) 
+                if not np.isinf(self.d[v]) and v != self.src and self.visited[v]]
+
+    def get_frontier(self):
+        return [[v, self.parent[v]]
+                for v in range(len(self.tri.V))
+                if not np.isinf(self.d[v]) and v != self.src and not self.visited[v]]
+
+    def set_path(self, source_vertex_index):
+        if isinstance(source_vertex_index, list):
+            source_vertex_index = source_vertex_index[0]
+        self.src = source_vertex_index
+
+    def shorten(self, path):
+        """
+        applies MakeGeodesic on the path from self.src to u
+        """
+        shortener = PathShortener(self.tri)
+        shortener.reflex_angle_threshold_for_edge_flip = self.reflex_angle_threshold_for_edge_flip
+        shortener.reflex_angle_threshold_for_flip_out = self.reflex_angle_threshold_for_flip_out
+        shortener.set_path(path)
+        shortener.make_geodesic()
+        return shortener.length, shortener.get_path()
+
+    def make_geodesic(self, limit_iterations=None, length_threshold=None):
+        for _ in self.make_geodesic_one_at_a_time(limit_iterations, length_threshold):
+            pass
+
+    def make_geodesic_one_at_a_time(self, limit_iterations=None, length_threshold=None):
+        """
+        Create the triangulation that includes all geodesic paths from the single source
+        """
+        num_v = len(self.tri.V)
+        src = self.src
+        self.d = np.ones(num_v) * np.inf
+        self.visited = np.zeros(num_v, dtype=bool)
+        self.parent = [None for _ in range(num_v)]
+
+        self.d[src] = 0
+
+        q = PriorityQueue(maxsize=num_v)
+        q.put((self.d[src], src))
+
+        while not q.empty():
+            _, v = q.get()
+            if self.visited[v]:
+                continue
+            self.visited[v] = True
+
+            print("handling vertex", v)
+            # if v == 188:
+            #     break
+
+            for e in self.tri.in_edges[v]:
+                u = e.origin
+                initial_path = self.tri.find_shortest_path(self.src, v, self.parent)
+                initial_path.append(u)
+                possible_dist, short_path = self.shorten(initial_path)
+
+                if self.d[u] > possible_dist:
+                    self.d[u] = possible_dist
+                    q.put((self.d[u], u))
+
+                    for i in range(len(short_path) - 1):
+                        self.parent[short_path[i+1]] = short_path[i]
+
+                    print("shortened the path for", u)
+                else:
+                    print("no change for", u)
+
+            yield
+
+
+
 
 

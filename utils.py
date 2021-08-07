@@ -49,12 +49,11 @@ def get_angle_between(vec1, vec2):
     return acos(dot_product)
 
 
-def is_reflex_or_flat(angle):
+def is_reflex_or_flat(angle, threshold=FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP):
     """
-    :arg angle:
     :return: whether the angle is equal or greater than pi
     """
-    return angle >= pi - REFLEX_ANGLE_THRESHOLD
+    return angle >= pi - threshold
 
 
 def orientation(p1, p2, p3):

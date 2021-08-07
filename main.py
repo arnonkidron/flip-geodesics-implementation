@@ -23,6 +23,7 @@ class Scene:
 
         self.slow_edge = None
         self.slow_generator = None
+        self.slow_generator2 = None
         self.result_path = MultiplePathVisualizer(self)
 
         self.add_extrinsic_mesh_actor()
@@ -65,6 +66,7 @@ class Scene:
         Outcome: display the message in a tkinter window, with retry & cancel
         Output: whether the user has chosen to retry
         """
+        print(msg)
         Tk().withdraw()
         return messagebox.showwarning(title=title, message=msg, type=messagebox.OK)
 
@@ -196,7 +198,6 @@ class Scene:
             prefer.KEY_EVENT_MAKE_GEODESIC: self.on_make_geodesic,
             prefer.KEY_EVENT_FLIPOUT: self.on_flip_out,
             prefer.KEY_EVENT_EDGE_FLIP: self.on_edge_flip,
-            prefer.KEY_EVENT_SINGLE_SOURCE_DIJKSTRA: self.on_single_source,
             prefer.KEY_EVENT_DELAUNAY: self.on_delaunay,
             prefer.KEY_EVENT_SHOW_INFO: self.on_info,
             prefer.KEY_EVENT_CLEAR_PICKED_PATH: self.on_clear,
@@ -222,14 +223,31 @@ class Scene:
 
         self.path_picker.on_pick(self.V[idx])
 
-    def on_single_source(self, limit_iterations=None):
+    def on_single_source(self):
         idx = self.path_picker.get_single_point_index()
         if idx is None:
             return
 
-        shortener = PathShortener(self.tri)
-        shortener.make_single_source_geodesic(idx, limit_iterations=limit_iterations)
+        kwargs = {
+            # 'color': prefer.TRIANGULATION_EDGE_COLOR,
+            'line_width': prefer.TRIANGULATION_EDGE_WIDTH,
+            'point_size': 0,
+        }
+
+        shortener = SingleSrcShortener(self.tri)
+        path = self.path_picker.get_path()
+        shortener.set_path(deepcopy(path))
+        try:
+            shortener.make_geodesic()
+        except TriangulationException as err:
+            self.result_path.set_path(shortener.get_path(), **kwargs)
+            self.result_path.set_path(shortener.get_frontier(), **kwargs, color='Black')
+            self.add_intrinsic_triangulation()
+            return self.warn(title="MakeGeodesic fail", msg=str(err))
+
+        self.result_path.set_path(shortener.get_path(), **kwargs)
         self.add_intrinsic_triangulation()
+
 
     def on_delaunay(self):
         excluded_edges = self.path_picker.get_path_edge_tuples_set().union(
@@ -240,7 +258,11 @@ class Scene:
         self.add_intrinsic_triangulation()
 
     def on_make_geodesic(self):
-        shortener = get_shortener(self.path_picker.roi, self.tri)
+        roi = self.path_picker.roi
+        if roi == ROI.VERTEX:
+            return self.on_single_source()
+
+        shortener = get_shortener(roi, self.tri)
         path = self.path_picker.get_path()
         shortener.set_path(deepcopy(path))
         try:
@@ -248,9 +270,19 @@ class Scene:
             new_path = shortener.get_path()
             self.set_result(new_path, prefer.SHOW_ON_MAKE_GEODESIC)
         except TriangulationException as err:
+            self.add_intrinsic_triangulation()
             return self.warn(title="MakeGeodesic fail", msg=str(err))
 
     def on_flip_out(self):
+        if self.path_picker.roi == ROI.VERTEX:
+            if self.slow_generator2 is None:
+                shortener = SingleSrcShortener(self.tri)
+                shortener.set_path(self.path_picker.get_path())
+                self.slow_generator2 = shortener.make_geodesic_one_at_a_time()
+            next(self.slow_generator2)
+            self.add_intrinsic_triangulation()
+            return
+
         if self.result_path.is_empty():
             viz = self.path_picker
         else:
@@ -262,6 +294,7 @@ class Scene:
             new_path = shortener.get_path()
             self.set_result(new_path, prefer.SHOW_ON_FLIPOUT)
         except TriangulationException as err:
+            self.add_intrinsic_triangulation()
             return self.warn(title="FlipOut fail", msg=str(err))
 
     def on_edge_flip(self):
@@ -271,6 +304,7 @@ class Scene:
         try:
             new_edge = self.tri.flip(old_edge)
         except TriangulationException as err:
+            self.add_intrinsic_triangulation()
             return self.warn(title="Edge flip fail", msg=str(err))
 
         # compute intersection points
@@ -439,7 +473,20 @@ class Scene:
 
 
 if __name__ == '__main__':
-    scene = Scene('C:\\Users\\Arnon\\Desktop\\eight.obj')
+    scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+    scene.on_pick_by_index(70)
+    # scene.on_make_geodesic()
+
+
+    # scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+    # scene.on_pick_by_index(2087)
+    # scene.on_pick_by_index(2085)
+    # scene.on_pick_by_index(2114)
+
+    # scene = Scene('C:\\Users\\Arnon\\Desktop\\horse.obj')
+    # scene.on_pick_by_index(14042)
+    # scene.on_pick_by_index(14257)
+
     # scene = Scene()
     # scene.on_pick_by_index(1733)
     # scene.on_pick_by_index(1870)
@@ -497,11 +544,8 @@ if __name__ == '__main__':
     # scene.on_pick_by_index(1063)
     # scene.on_pick_by_index(936)
 
-    scene.on_pick_by_index(4)
-    scene.on_pick_by_index(22)
-    scene.on_flip_out()
-    scene.on_make_geodesic()
-
+    # scene.on_pick_by_index(14)
+    # scene.on_pick_by_index(23)
 
     scene.show()
 

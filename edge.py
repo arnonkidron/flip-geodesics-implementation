@@ -1,9 +1,9 @@
 import numpy as np
-from utils import get_angle, get_side_length, rotate, turn, get_closest_point, get_angle_between, is_orientation_counterclockwise, orientation
-from math import degrees, isclose, pi
+from utils import get_angle, rotate, turn, get_closest_point, get_angle_between
+from math import isclose, pi
 from exceptions import *
-from NumericErrorThresholds import *
 from enum import Enum
+import ViewPreferences as prefer
 
 
 class BaseHalfEdge:
@@ -242,6 +242,8 @@ class IntrinsicHalfEdge(BaseHalfEdge):
                     e = prev_intersection.mesh_edge
                     normal = e.get_face_normal() + e.twin.get_face_normal()
                     normal /= np.linalg.norm(normal)
+                    normal *= mesh.avg_face_area
+                    normal *= prefer.FAILED_EDGES_JUMP_HEIGHT_COEF
                     lift_coords = prev_intersection.coords + normal
                     lift = Intersection(lift_coords, is_fake=True)
                     self.intersections.append(lift)
@@ -341,6 +343,9 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
                 / 3
 
         return self.triangle_center
+
+    def get_triangle_area(self):
+        return np.linalg.norm(np.cross(self.vec, self.next.vec)) / 2
 
     def init_face_angle(self):
         angle = get_angle_between(

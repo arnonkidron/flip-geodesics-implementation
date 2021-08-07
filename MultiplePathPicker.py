@@ -13,8 +13,8 @@ class MultiplePathVisualizer:
         else:
             return ROI.NETWORK
 
-    def add_one(self):
-        new_one = PathVisualizer(self.scene, name="_result_path_" + str(len(self.visualizers)))
+    def add_one(self, **kwargs):
+        new_one = PathVisualizer(self.scene, name="_result_path_" + str(len(self.visualizers)), **kwargs)
         self.visualizers.append(new_one)
 
     def is_one(self):
@@ -33,13 +33,13 @@ class MultiplePathVisualizer:
         else:
             return [x.get_path() for x in self.visualizers]
 
-    def set_path(self, paths):
+    def set_path(self, paths, **kwargs):
         if not isinstance(paths[0], list):
             paths = [paths]
 
         self.visualizers = []
         for path in paths:
-            self.add_one()
+            self.add_one(**kwargs)
             self.last.set_path(path)
 
     def add_actor(self):
@@ -53,6 +53,8 @@ class MultiplePathVisualizer:
         self.visualizers = []
 
     def get_path_edge_tuples_set(self):
+        if self.is_empty():
+            return []
         return set.union(*[x.get_path_edge_tuples_set() for x in self.visualizers])
 
 
@@ -105,10 +107,10 @@ class MultiplePathPicker(MultiplePathVisualizer):
             return
         return self.last.get_corresponding_edge()
 
-    def is_intersection_point(self):
+    def is_intersection_point(self, idx):
         if not self.is_one():
             return
-        return self.last.is_intersection_point()
+        return self.last.is_intersection_point(idx)
 
     ###########################################
     #  methods we simply carry on to the last

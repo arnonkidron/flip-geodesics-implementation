@@ -2,11 +2,11 @@ from edge import *
 from exceptions import *
 import numpy as np
 from copy import deepcopy
-from utils import turn, is_reflex_or_flat
+from utils import is_reflex_or_flat, get_side_length
 from queue import PriorityQueue
 from IntrinsicFaceTriangulator import IntrinsicFaceTriangulator
 import ViewPreferences as prefer
-
+from NumericErrorThresholds import FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
 
 class BaseTriangulation:
     """
@@ -135,23 +135,6 @@ class BaseTriangulation:
         path.reverse()
         return path
 
-    # probably unneeded
-    def find_all_shortest_paths(self, src):
-        """
-        :arg src: a source vertex
-        :return: the set of all shortests paths
-        """
-        _, parent = self.dijkstra_distance_and_tree(src)
-
-        # find the leaves of the search tree
-        num_v = len(self.V)
-        parents_set = set(parent)
-        leaves = [v for v in range(num_v) if v not in parents_set]
-
-        # return the set of paths to leaves
-        output = [self.find_shortest_path(src, leaf, parent) for leaf in leaves]
-        return output
-
     def dijkstra_distance_and_tree(self, src):
         """
         :arg src: the source vertex from which we begin the Dijkstra search
@@ -272,9 +255,12 @@ class IntrinsicTriangulation(BaseTriangulation):
 
         return self.flip(e)
 
-    def flip(self, old_edge):
+    def flip(self, old_edge, flat_angle_threshold=FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP):
         """
         edge flip - replacing old_edge by the other diagonal of its quadrilateral
+
+        :arg old_edge: the edge to be flipped
+        :arg flat_angle_threshold: to avoid flipping edges if it would create an almost flat angle
 
         :except ReflexAngleException: cannot flip because the quadrilateral is non-convex
         :except LowDegreeVertexException: cannot flip because the edge has an endpoint of degree 1
@@ -296,7 +282,8 @@ class IntrinsicTriangulation(BaseTriangulation):
         triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
         triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle
 
-        if is_reflex_or_flat(triangle_1_angle) or is_reflex_or_flat(triangle_2_angle):
+        if is_reflex_or_flat(triangle_1_angle, flat_angle_threshold) \
+                or is_reflex_or_flat(triangle_2_angle, flat_angle_threshold):
             raise ReflexAngleException(old_edge)
 
         self.remove_edge(old_edge)
@@ -304,7 +291,7 @@ class IntrinsicTriangulation(BaseTriangulation):
         e = self.construct_triangle_for_flip(None, triangle_1_prev, triangle_1_next, triangle_1_angle)
         self.construct_triangle_for_flip(e, triangle_2_prev, triangle_2_next, triangle_2_angle)
 
-        # old_edge.print2("Flipped into", e)
+        old_edge.print2("Flipped into", e)
         return e
 
     def delaunay(self, excluded_edges):
@@ -497,6 +484,7 @@ class ExtrinsicTriangulation(BaseTriangulation):
     """
     def __init__(self, V):
         super().__init__(V)
+        self.avg_face_area = None
 
     def add_triangle(self, sides):
         """
@@ -520,6 +508,8 @@ class ExtrinsicTriangulation(BaseTriangulation):
     def init_face_angles(self):
         for e in self.all_edges():
             e.init_face_angle()
+
+        self.avg_face_area = np.mean([next(f).get_triangle_center() for f in self.all_faces()])
 
     def get_intersection_complete_search(self, line_start, line_vecs, search_source):
         NUM_EDGE_LIMIT = 200
