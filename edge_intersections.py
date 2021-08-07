@@ -3,6 +3,7 @@ from utils import rotate, turn
 from math import pi
 from enum import Enum
 import view_preferences as prefer
+from copy import deepcopy, copy
 
 
 class Intersection:
@@ -15,10 +16,19 @@ class Intersection:
         self.in_vec = in_vec
         self.out_vec = out_vec
         self.is_fake = is_fake
+        self.other_candidates = []
+
+    def __deepcopy__(self, memo):
+        return copy(self)
 
     @property
     def error(self):
         return self.distance_from_face_center
+
+    @property
+    def surface_error(self):
+        n = self.mesh_edge.get_face_normal()
+        return np.dot(n, self.in_vec)
 
     def get_next_edges(self):
         return [
@@ -49,6 +59,9 @@ class EdgeIntersections:
         self.status = self.Status.UNINITIALIZED
         self.points = []
 
+        self.best_attempt_points = None
+        self.best_attempt_score = np.inf
+
     class Status(Enum):
         UNINITIALIZED = 1
         FINISHED = 2
@@ -62,6 +75,9 @@ class EdgeIntersections:
     def set_no_intersection(self):
         self.status = self.Status.FINISHED
         self.points = []
+
+    def get_start_point(self):
+        return Intersection(self.edge.near_mesh_edge.origin_coords)
 
     def get_first_segment_vector(self):
         next_mesh_edge = self.edge.near_mesh_edge.twin.next
@@ -91,7 +107,7 @@ class EdgeIntersections:
             yield None; return
 
         # initial values
-        prev_intersection = Intersection(self.edge.near_mesh_edge.origin_coords)
+        prev_intersection = self.get_start_point()
         vecs = [self.get_first_segment_vector()]
         mesh_edges = [self.get_first_intersecting_mesh_edge()]
 
@@ -108,7 +124,9 @@ class EdgeIntersections:
             if len(candidates) == 1:
                 intersection = candidates[0]
             elif len(candidates) > 1:
-                intersection = min(candidates, key=lambda x: x.distance_from_mesh_edge)
+                candidates.sort(key=lambda x: x.distance_from_mesh_edge)
+                intersection = candidates[0]
+                intersection.other_candidates = candidates[1:]
             elif len(candidates) == 0:
                 intersection = None
                 # intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
@@ -125,20 +143,12 @@ class EdgeIntersections:
                     # if he succeeds - no failure, take his intersections
                     self.status = self.Status.TWIN_FINISHED
                     self.points = []
+                    yield None; return
                 else:
-                    self.edge.print("----------", " Both twins failed-----------")
-                    # we couldn't compute the intersection points properly
-                    # now we need to make it look nice for rendering
-                    # add another point, above the previous one, in order to make the path go above the mesh
-                    e = prev_intersection.mesh_edge
-                    normal = e.get_face_normal() + e.twin.get_face_normal()
-                    normal /= np.linalg.norm(normal)
-                    normal *= mesh.avg_face_area
-                    normal *= prefer.FAILED_EDGES_JUMP_HEIGHT_COEF
-                    lift_coords = prev_intersection.coords + normal
-                    lift = Intersection(lift_coords, is_fake=True)
-                    self.points.append(lift)
-                yield None; return
+                    prev_intersection, intersection = self.backtrack(mesh)
+                    if prev_intersection is not None:
+                        continue
+                    yield None; return
 
             self.points.append(intersection)
 
@@ -165,3 +175,42 @@ class EdgeIntersections:
             return np.flipud(self.twin.get_intersections(mesh))
 
         return self.points
+
+    def backtrack(self, mesh):
+        # we couldn't compute the intersection points properly. Now we go back and try other candidates
+
+        # save attempt
+        score = sum([intersection.surface_error for intersection in self.points])
+        if self.best_attempt_score > score:
+            self.best_attempt_score = score
+            self.best_attempt_points = deepcopy(self.points)
+
+        # backtrack
+        while len(self.points) > 1:
+            self.points.pop()
+            other_candidates = self.points[-1].other_candidates
+            if len(other_candidates) > 0:
+                self.points.pop()
+                intersection = other_candidates[0]
+                intersection.other_candidates = other_candidates[1:]
+                prev_intersection = self.points[-1] if len(self.points) > 0 else self.get_start_point()
+                return prev_intersection, intersection
+
+        # end of backtracking
+        self.edge.print("---------- edge", "failed to compute intersection points-----------")
+        self.points = self.best_attempt_points
+        self.wrap_up_failure(mesh)
+        return None, None
+
+    def wrap_up_failure(self, mesh):
+        # we failed to compute all intersection points, and now we need to make it look nice for rendering
+        # add another point, lifted above the previous one, in order to make the path go above the mesh
+        last_intersection = self.points[-1]
+        e = last_intersection.mesh_edge
+        normal = e.get_face_normal() + e.twin.get_face_normal()
+        normal /= np.linalg.norm(normal)
+        normal *= mesh.avg_face_area
+        normal *= prefer.FAILED_EDGES_JUMP_HEIGHT_COEF
+        lift_coords = last_intersection.coords + normal
+        lift = Intersection(lift_coords, is_fake=True)
+        self.points.append(lift)

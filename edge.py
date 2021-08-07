@@ -169,7 +169,7 @@ class IntrinsicHalfEdge(BaseHalfEdge):
         return self.intersections_.compute_one_at_a_time(mesh)
 
     def get_intersections(self, mesh):
-        return self.intersections_.get_intersections(None)
+        return self.intersections_.get_intersections(mesh)
 
     ##############
     #    printing
