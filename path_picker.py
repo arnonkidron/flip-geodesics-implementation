@@ -127,13 +127,13 @@ class PathVisualizer:
                 e = self.scene.tri.get_all_edges_between(new_part[i], new_part[i + 1])[-1]
 
             intersections = e.get_intersections(self.scene.tri.mesh)
-            if e.intersections_status != e.Status.FAILED \
+            if e.intersections_.status != e.intersections_.Status.FAILED \
                     and len(intersections) > 0:
                 index_begin = len(V)
                 V = np.vstack((V, [p.coords for p in intersections]))
                 index_end = len(V)
                 E.extend(list(range(index_begin, index_end)))
-            elif e.intersections_status == e.Status.FAILED:
+            elif e.intersections_.status == e.intersections_.Status.FAILED:
                 if not prefer.SHOW_FAILED_PATH_EDGES:
                     E[0] = len(E) - 1
                     poly_data = pv.PolyData(V, lines=E)

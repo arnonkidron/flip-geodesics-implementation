@@ -2,15 +2,19 @@ from scene import *
 
 
 if __name__ == '__main__':
-    scene = Scene('C:\\Users\\Arnon\\Desktop\\knot1.obj')
+    scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
 
-    # scene.on_pick_by_index(2067)
-    # scene.on_pick_by_index(2097)
-    # scene.on_pick_by_index(2094)
-    # scene.path_picker.on_start_new_path()
-    # scene.on_pick_by_index(2097)
+    scene.on_pick_by_index(229)
+    scene.on_pick_by_index(230)
+    scene.on_pick_by_index(236)
+    scene.on_pick_by_index(235)
+    scene.on_pick_by_index(229)
+    scene.path_picker.on_start_new_path()
+    scene.on_pick_by_index(236)
+    scene.on_pick_by_index(2)
+    scene.on_pick_by_index(235)
 
-    scene.on_pick_by_index(70)
+    # scene.on_pick_by_index(70)
     scene.on_make_geodesic()
 
     # scene.on_pick_by_index(2087)

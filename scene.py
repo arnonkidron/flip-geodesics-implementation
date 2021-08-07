@@ -296,6 +296,9 @@ class Scene:
         else:
             viz = self.result_path
         shortener = get_shortener(viz.roi, self.tri)
+        if shortener is None:
+            return
+
         shortener.set_path(deepcopy(viz.get_path()))
         try:
             shortener.flipout_the_minimal_wedge()
@@ -441,14 +444,12 @@ class Scene:
         if e is None:
             return
 
-        arrows = pv.Arrow(self.V[e.origin], e.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
+        arrows = pv.Arrow(self.V[e.origin], e.intersections_.get_first_segment_vector(), tip_radius=0.25, shaft_radius=0.10, scale='auto')
         # self.plotter.remove_actor('vecs')
         self.plotter.add_mesh(arrows, name='vecs', color='SpringGreen')
         yield True
 
         for intersection in e.get_intersections(self.tri.mesh):
-            # if e.intersections_status != e.Status.UNINITIALIZED:
-            #     break
             if intersection.is_fake:
                 break
 

@@ -1,9 +1,6 @@
-import numpy as np
-from utils import get_angle, rotate, turn, get_closest_point, get_angle_between
-from math import isclose, pi
+from utils import get_angle, get_closest_point, get_angle_between
+from math import isclose
 from exceptions import *
-from enum import Enum
-import view_preferences as prefer
 from edge_intersections import *
 
 
@@ -92,17 +89,9 @@ class IntrinsicHalfEdge(BaseHalfEdge):
         self.near_mesh_edge = None
         self.angle_from_near_mesh_edge = None
 
-        # assume the edge lies on a mesh edge, hence it has no intersection points with other mesh edges
-        self.intersections = []
-        self.intersections_status = self.Status.UNINITIALIZED
+        self.intersections_ = EdgeIntersections(self)
 
         self.face_color = None
-
-    class Status(Enum):
-        UNINITIALIZED = 1
-        FINISHED = 2
-        TWIN_FINISHED = 3
-        FAILED = 4
 
     def to_extrinsic(self, V):
         """
@@ -163,9 +152,9 @@ class IntrinsicHalfEdge(BaseHalfEdge):
             self.sit_on_mesh_edge(next_mesh_edge)
 
     def sit_on_mesh_edge(self, mesh_edge):
-            self.intersections_status = self.Status.FINISHED
-            self.near_mesh_edge = mesh_edge
-            self.angle_from_near_mesh_edge = 0
+        self.intersections_.set_no_intersection()
+        self.near_mesh_edge = mesh_edge
+        self.angle_from_near_mesh_edge = 0
 
     def is_on_mesh_edge(self):
         return self.angle_from_near_mesh_edge == 0
@@ -173,108 +162,14 @@ class IntrinsicHalfEdge(BaseHalfEdge):
     ###############
     # computing the edge's intersection
     ###############
-    def get_first_segment_vector(self):
-        next_mesh_edge = self.near_mesh_edge.twin.next
-        return turn(
-            self.near_mesh_edge.vec,
-            self.angle_from_near_mesh_edge,
-            towards=next_mesh_edge.vec
-        )
-
-    def get_first_intersecting_mesh_edge(self):
-        return self.near_mesh_edge.twin.next.next
-
     def init_intersections(self, mesh):
-        for _ in self.init_intersections_one_at_a_time(mesh):
-            pass
+        return self.intersections_.compute(mesh)
 
     def init_intersections_one_at_a_time(self, mesh):
-        if self.intersections_status != self.Status.UNINITIALIZED:
-            yield None; return
-
-        self.intersections = []
-        dst = self.dst
-
-        if self.near_mesh_edge.is_point_in_face(dst):
-            print("--------Superfluous---------")
-            self.sit_on_mesh_edge(self.near_mesh_edge)
-            yield None; return
-
-        # initial values
-        prev_intersection = Intersection(self.near_mesh_edge.origin_coords)
-        vecs = [self.get_first_segment_vector()]
-        mesh_edges = [self.get_first_intersecting_mesh_edge()]
-
-        while len(self.intersections) < 200:
-            # try both edges, and both vectors
-            intersection = None
-            candidates = []
-            for e in mesh_edges:
-                for vec in vecs:
-                    candidate = e.get_intersection(prev_intersection.coords, vec)
-                    if candidate is not None:
-                        candidates.append(candidate)
-
-            if len(candidates) == 1:
-                intersection = candidates[0]
-            elif len(candidates) > 1:
-                intersection = min(candidates, key=lambda x: x.distance_from_mesh_edge)
-            elif len(candidates) == 0:
-                intersection = None
-                # intersection = mesh.get_intersection_complete_search(prev_intersection.coords, vecs, mesh_edges[0])
-                # if intersection is not None \
-                #         and intersection.distance_from_mesh_edge > INTERSECTION_THRESHOLD:
-                #     intersection = None
-
-            if intersection is None:
-                self.intersections_status = self.Status.FAILED
-
-                # let the twin try his luck
-                self.twin.init_intersections(mesh)
-                if self.twin.intersections_status == self.Status.FINISHED:
-                    # if he succeeds - no failure, take his intersections
-                    self.intersections_status = self.Status.TWIN_FINISHED
-                    self.intersections = []
-                else:
-                    self.print("----------", " Both twins failed-----------")
-                    # we couldn't compute the intersection points properly
-                    # now we need to make it look nice for rendering
-                    # add another point, above the previous one, in order to make the path go above the mesh
-                    e = prev_intersection.mesh_edge
-                    normal = e.get_face_normal() + e.twin.get_face_normal()
-                    normal /= np.linalg.norm(normal)
-                    normal *= mesh.avg_face_area
-                    normal *= prefer.FAILED_EDGES_JUMP_HEIGHT_COEF
-                    lift_coords = prev_intersection.coords + normal
-                    lift = Intersection(lift_coords, is_fake=True)
-                    self.intersections.append(lift)
-                yield None; return
-
-            self.intersections.append(intersection)
-
-            vecs = intersection.get_out_vectors()
-            mesh_edges = intersection.get_next_edges()
-
-            prev_intersection.out_vec = intersection.in_vec
-            prev_intersection = intersection
-
-            yield intersection
-            if mesh_edges[0].is_point_in_face(dst):
-                break
-
-        self.intersections_status = self.Status.FINISHED
-        if self.twin.intersections_status == self.Status.UNINITIALIZED:
-            self.twin.intersections_status = self.Status.TWIN_FINISHED
-        yield None; return
+        return self.intersections_.compute_one_at_a_time(mesh)
 
     def get_intersections(self, mesh):
-        if self.intersections_status == self.Status.UNINITIALIZED:
-            self.init_intersections(mesh)
-
-        if self.intersections_status == self.Status.TWIN_FINISHED:
-            return np.flipud(self.twin.get_intersections(mesh))
-
-        return self.intersections
+        return self.intersections_.get_intersections(None)
 
     ##############
     #    printing
@@ -290,8 +185,8 @@ class IntrinsicHalfEdge(BaseHalfEdge):
 
     def get_info(self):
         if self.angle_from_near_mesh_edge != 0:
-            n_mid = 0 if self.intersections is None else len(self.intersections)
-            status = self.intersections_status.name
+            n_mid = len(self.get_intersections())
+            status = self.intersections_.status.name
             intersection_report = "{} with {} intersections\n".format(status, n_mid)
         else:
             intersection_report = ""
@@ -394,40 +289,3 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
 
         return self.next.is_point_in_face(point, counter + 1)
 
-
-class Intersection:
-    def __init__(self, coords, mesh_edge=None, distance_from_mesh_edge=None, in_vec=None, out_vec=None, is_fake=False):
-        self.coords = coords
-        self.mesh_edge = mesh_edge
-        self.distance_from_mesh_edge = distance_from_mesh_edge
-        self.distance_from_face_center = None if self.mesh_edge is None else \
-            np.linalg.norm(self.coords - self.mesh_edge.get_face_normal())
-        self.in_vec = in_vec
-        self.out_vec = out_vec
-        self.is_fake = is_fake
-
-    @property
-    def error(self):
-        return self.distance_from_face_center
-
-    def get_next_edges(self):
-        return [
-            self.mesh_edge.twin.next,
-            self.mesh_edge.twin.next.next,
-        ]
-
-    def get_out_vectors(self):
-        if self.out_vec is not None:
-            return [self.out_vec]
-
-        if self.mesh_edge is None or self.in_vec is None:
-            return []
-
-        out_vec1 = rotate(self.in_vec, self.mesh_edge.mesh_face_angle, self.mesh_edge.vec)
-        out_vec2 = rotate(self.in_vec, 2 * pi - self.mesh_edge.mesh_face_angle, self.mesh_edge.vec)
-        return [out_vec1, out_vec2]
-
-    def test_is_vec_on_face(self):
-        n = self.mesh_edge.get_face_normal()
-        dot_products = [np.dot(vec / np.linalg.norm(vec), n) for vec in self.get_out_vectors()]
-        print(dot_products)

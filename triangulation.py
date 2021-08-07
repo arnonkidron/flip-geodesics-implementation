@@ -355,7 +355,7 @@ class IntrinsicTriangulation(BaseTriangulation):
                     V = np.vstack((V, [p.coords for p in intersections]))
                     index_end = len(V)
                     points.extend(list(range(index_begin, index_end)))
-                if e.intersections_status == e.Status.FAILED:
+                if e.intersections_.status == e.intersections_.Status.FAILED:
                     is_face_failed = True
                     if not prefer.SHOW_FAILED_TRIANGULATION_EDGES:
                         # add the points added so far to E, and start a new one

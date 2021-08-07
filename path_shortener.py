@@ -6,7 +6,7 @@ from joint import Joint
 
 
 def get_shortener(mode, triangulation):
-        if mode == ROI.PATH:
+        if mode == ROI.PATH or mode == ROI.EDGE:
             return PathShortener(triangulation)
         elif mode == ROI.LOOP:
             return LoopShortener(triangulation)
@@ -176,88 +176,6 @@ class PathShortener(BaseShortener):
         bypass = self.flipout(joint)
         self.update_path(joint, bypass)
 
-    ################
-    # move to SingleSourceShortener
-    ################
-    def set_tree(self, src, parent):
-        self.path = []
-        self.is_geodesic = False
-
-        num_v = len(self.tri.V)
-
-        self.wedge_angles_forth = [
-            (v,
-                self.tri.get_wedge_angle(
-                    v,
-                    parent[v],
-                    parent[parent[v]],
-                )
-            ) for v in range(num_v) if src not in [v, parent[v]]
-        ]
-        self.wedge_angles_back = [
-            (v,
-                self.tri.get_wedge_angle(
-                    parent[parent[v]],
-                    parent[v],
-                    v,
-                )
-            ) for v in range(num_v) if src not in [v, parent[v]]
-        ]
-
-    def update_tree(self, bypass, is_forth):
-        if not is_forth:
-            bypass.reverse()
-
-        pass
-
-    def flipout_the_minimal_wedge_in_tree(self, parent):
-        if self.is_geodesic:
-            return
-
-        # find minimal wedge
-        min_vertex_forth, min_angle_forth = min(self.wedge_angles_forth)
-        min_vertex_back, min_angle_back = min(self.wedge_angles_back)
-
-        if min_angle_forth < min_angle_back:
-            min_vertex, min_angle, is_forth = min_vertex_forth, min_angle_forth, True
-        else:
-            min_vertex, min_angle, is_forth = min_vertex_back, min_angle_back, False
-
-        if is_reflex_or_flat(min_angle, threshold=self.reflex_angle_threshold_for_flip_out):
-            self.is_geodesic = True
-            return self.path
-
-        # find the vertices
-        if is_forth:
-            a, b, c = min_vertex, parent[min_vertex], parent[parent[min_vertex]]
-        else:
-            c, b, a = min_vertex, parent[min_vertex], parent[parent[min_vertex]]
-
-        bypass = self.flipout(a, b, c)
-
-        # update tree
-        self.update_tree(bypass, is_forth)
-
-        return self.path
-
-    def make_single_source_geodesic(self, src, limit_iterations=None, length_threshold=None):
-        _, parent = self.tri.dijkstra_distance_and_tree(src)
-        self.set_tree(src, parent)
-
-        iteration = 0
-        while not self.is_geodesic:
-            if limit_iterations is not None \
-                    and iteration > limit_iterations:
-                break
-            iteration += 1
-
-            self.flipout_the_minimal_wedge_in_tree(parent)
-
-            _, parent = self.tri.dijkstra_distance_and_tree(src)
-            self.set_tree(src, parent)
-
-        print("Done {} iterations".format(limit_iterations))
-
 
 class LoopShortener(PathShortener):
     def __init__(self, triangulation):
@@ -329,11 +247,11 @@ class MultiplePathShortener(BaseShortener):
                         path2 = path[pos:]
                         del paths[i]
                         if path1[0] == path2[-1]:
-                            # path was a loop
-                            path2.pop()
-                            path2.extend(path1)
-                            path2.append(None)
-                            paths.append(path2)
+                            # path was a loop, but we must regard pos as a fixed point
+                            # now we camouflage it, so that later we will not classify it as a loop
+                            non_loop = path2[:-1] + path1
+                            non_loop[-1] = -non_loop[-1]
+                            paths.append(non_loop)
                         else: # path
                             paths.append(path1)
                             paths.append(path2)
@@ -347,11 +265,14 @@ class MultiplePathShortener(BaseShortener):
 
         # create lots of shorteners
         for path in paths:
-            if path[-1] is None:
-                roi = ROI.PATH
-                path.pop()
+            if len(path) == 0:
+                continue
+            elif path[0] == path[-1]:
+                roi = ROI.LOOP
             else:
-                roi = ROI.LOOP if path[0] == path[-1] else ROI.PATH
+                roi = ROI.PATH
+                if path[-1] < 0: # non-loop
+                    path[-1] = -path[-1]
             shortener = get_shortener(roi, self.tri)
             shortener.set_path(path)
             self.shorteners.append(shortener)
@@ -366,4 +287,8 @@ class MultiplePathShortener(BaseShortener):
             return
 
         shortener.flipout_the_minimal_wedge()
+
+        # special case of non-loops
+        if shortener.is_geodesic and len(shortener.path) == 3 and shortener.path[0] == shortener.path[-1]:
+            shortener.set_path([shortener.path[0]])
 
