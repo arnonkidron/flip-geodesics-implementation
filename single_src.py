@@ -71,13 +71,11 @@ class SingleSrcShortener:
             self.visited[v] = True
 
             path_to_v = self.tri.find_shortest_path(self.src, v, self.parent)
-            # print("handling vertex", v, "whose path is", path_to_v)
 
             for e in self.tri.in_edges[v]:
                 u = e.origin
                 if self.visited[u]:
                     continue
-                # print("handling neighbour", u, "try shortening", path_to_v + [u])
                 possible_dist, short_path, flipped_edges = self.shorten(path_to_v + [u])
                 self.reconnect_vertices(flipped_edges)
 
@@ -87,10 +85,6 @@ class SingleSrcShortener:
 
                     for i in range(len(short_path) - 1):
                         self.parent[short_path[i+1]] = short_path[i]
-
-                    # print("shortened the path for", u)
-                # else:
-                    # print("no change for", u)
 
             yield
 

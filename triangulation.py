@@ -249,8 +249,11 @@ class IntrinsicTriangulation(BaseTriangulation):
 
         for v in [old_edge.origin, old_edge.dst]:
             deg = len(self.in_edges[v])
-            if deg == 1 or deg == 2:
+            if deg == 1:
                 raise LowDegreeVertexException(old_edge, v, deg)
+            elif deg == 2:
+                err = LowDegreeVertexWarning(old_edge, v, deg)
+                print("Warning:", str(err))
 
         triangle_1_angle = old_edge.twin.corner_angle + triangle_1_prev.corner_angle
         triangle_2_angle = old_edge.corner_angle + triangle_2_prev.corner_angle

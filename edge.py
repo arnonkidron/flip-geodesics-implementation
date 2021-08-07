@@ -244,6 +244,9 @@ class ExtrinsicHalfEdge(BaseHalfEdge):
         return np.linalg.norm(np.cross(self.vec, self.next.vec)) / 2
 
     def init_face_angle(self):
+        if self.twin is None:
+            exit("Preprocessing error: Cannot handle open meshes")
+
         angle = get_angle_between(
             self.get_face_normal(),
             self.twin.get_face_normal()

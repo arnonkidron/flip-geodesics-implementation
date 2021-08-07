@@ -38,6 +38,15 @@ class LowDegreeVertexException(TriangulationException):
         super().__init__(msg)
 
 
+class LowDegreeVertexWarning(TriangulationException):
+    def __init__(self, e, idx, deg):
+        msg = "Flipping edge {}->{}, " \
+              "despite vertex {} having degree {}" \
+            .format(e.origin, e.dst,
+                    idx, deg)
+        super().__init__(msg)
+
+
 class ReflexAngleException(TriangulationException):
     def __init__(self, e):
         msg = "Cannot flip edge {}->{}, " \
