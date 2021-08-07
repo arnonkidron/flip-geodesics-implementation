@@ -12,8 +12,6 @@ def get_shortener(mode, triangulation):
             return LoopShortener(triangulation)
         elif mode == ROI.NETWORK:
             return MultiplePathShortener(triangulation)
-        elif mode == ROI.VERTEX:
-            return SingleSrcShortener(triangulation)
 
 
 class BaseShortener:
@@ -25,6 +23,9 @@ class BaseShortener:
 
         self.reflex_angle_threshold_for_edge_flip = FLAT_ANGLE_THRESHOLD_FOR_EDGE_FLIP
         self.reflex_angle_threshold_for_flip_out = FLAT_ANGLE_THRESHOLD_FOR_FLIP_OUT
+
+        self.keep_list_of_flipped_edges = False
+        self.flipped_edges = []
 
     @property
     def length(self):
@@ -44,20 +45,25 @@ class BaseShortener:
         if joint.e1 == joint.e2 or joint.e1 == joint.e2.twin:
             raise SelfEdgeException(a, b, c)
 
-        # calculate bypassing path
+        # calculate bypassing path, by going along the wedge edges
         bypass = [a]
+        wedge_edges = [None]
+
         e = joint.e1.next
         while e.dst != c:
             bypass.append(e.dst)
+            wedge_edges.append(e)
             e = e.twin.next
         bypass.append(c)
 
         i = 1
         while i != len(bypass) - 1:
-            to_flip_edge = self.tri.get_edge(bypass[i], b)
+            to_flip_edge = wedge_edges[i]
 
             try:
                 self.tri.flip(to_flip_edge, flat_angle_threshold=self.reflex_angle_threshold_for_edge_flip)
+                if self.keep_list_of_flipped_edges:
+                    self.flipped_edges.append(to_flip_edge)
             except ReflexAngleException:
                 i = i + 1
                 continue
@@ -65,6 +71,7 @@ class BaseShortener:
                 raise err
 
             del bypass[i]
+            del wedge_edges[i]
             if i > 1:
                 i = i - 1
 
@@ -79,6 +86,7 @@ class BaseShortener:
 
         initial_length = self.length
 
+        self.flipped_edges = []
         iteration = 0
         while not self.is_geodesic:
             if limit_iterations is not None \
@@ -110,9 +118,12 @@ class PathShortener(BaseShortener):
     def length(self):
         return np.sum([self.tri.get_edge(self.path[i], self.path[i+1]).length for i in range(len(self.path) - 1)])
 
+    def is_path_too_short(self):
+        return len(self.path) <= 2
+
     def set_path(self, path):
         self.path = path
-        self.is_geodesic = len(path) <= 2
+        self.is_geodesic = self.is_path_too_short()
 
         if self.is_geodesic:
             self.joints = []
@@ -141,7 +152,8 @@ class PathShortener(BaseShortener):
 
         self.path[b_index:b_index] = bypass[1:-1]
 
-        # could be made much more efficient
+        # could be made much more efficient, but for that we'd need to compute the indices correctly, and
+        # have every joint keep pointers to its next & previous joints
         self.set_path(self.path)
 
     def get_minimal_wedge_angle(self):
@@ -260,11 +272,14 @@ class LoopShortener(PathShortener):
     def length(self):
         return np.sum([self.tri.get_edge(self.path[i - 1], self.path[i]).length for i in range(len(self.path))])
 
+    def is_path_too_short(self):
+        return len(self.path) <= 1
+
     def set_path(self, path):
         if len(path) > 0 and path[0] == path[-1]:
             path.pop()
         self.path = path
-        self.is_geodesic = len(path) <= 1
+        self.is_geodesic = self.is_path_too_short()
 
         if self.is_geodesic:
             self.joints = []
@@ -353,13 +368,15 @@ class MultiplePathShortener(BaseShortener):
         shortener.flipout_the_minimal_wedge()
 
 
-class SingleSrcShortener(BaseShortener):
+class SingleSrcShortener:
     def __init__(self, triangulation):
-        super().__init__(triangulation)
+        self.tri = triangulation
         self.src = None
         self.parent = None
         self.visited = None
         self.d = None
+        self.q = None
+
         self.reflex_angle_threshold_for_edge_flip = REFLEX_ANGLE_THRESHOLD_FOR_SINGLE_SRC_GEODESICS
         self.reflex_angle_threshold_for_flip_out = REFLEX_ANGLE_THRESHOLD_FOR_SINGLE_SRC_GEODESICS
 
@@ -368,7 +385,7 @@ class SingleSrcShortener(BaseShortener):
             return [self.src]
         return [[v, self.parent[v]] 
                 for v in range(len(self.tri.V)) 
-                if not np.isinf(self.d[v]) and v != self.src and self.visited[v]]
+                if not np.isinf(self.d[v]) and v != self.src and self.visited[v] and self.parent[v] is not None]
 
     def get_frontier(self):
         return [[v, self.parent[v]]
@@ -382,14 +399,15 @@ class SingleSrcShortener(BaseShortener):
 
     def shorten(self, path):
         """
-        applies MakeGeodesic on the path from self.src to u
+        apply MakeGeodesic on the path
         """
         shortener = PathShortener(self.tri)
         shortener.reflex_angle_threshold_for_edge_flip = self.reflex_angle_threshold_for_edge_flip
         shortener.reflex_angle_threshold_for_flip_out = self.reflex_angle_threshold_for_flip_out
+        shortener.keep_list_of_flipped_edges = True
         shortener.set_path(path)
         shortener.make_geodesic()
-        return shortener.length, shortener.get_path()
+        return shortener.length, shortener.get_path(), shortener.flipped_edges
 
     def make_geodesic(self, limit_iterations=None, length_threshold=None):
         for _ in self.make_geodesic_one_at_a_time(limit_iterations, length_threshold):
@@ -407,37 +425,59 @@ class SingleSrcShortener(BaseShortener):
 
         self.d[src] = 0
 
-        q = PriorityQueue(maxsize=num_v)
-        q.put((self.d[src], src))
+        self.q = PriorityQueue(maxsize=num_v)
+        self.q.put((self.d[src], src))
 
-        while not q.empty():
-            _, v = q.get()
+        while not self.q.empty():
+            _, v = self.q.get()
             if self.visited[v]:
                 continue
             self.visited[v] = True
 
-            print("handling vertex", v)
-            # if v == 188:
-            #     break
+            path_to_v = self.tri.find_shortest_path(self.src, v, self.parent)
+            # print("handling vertex", v, "whose path is", path_to_v)
 
             for e in self.tri.in_edges[v]:
                 u = e.origin
-                initial_path = self.tri.find_shortest_path(self.src, v, self.parent)
-                initial_path.append(u)
-                possible_dist, short_path = self.shorten(initial_path)
+                if self.visited[u]:
+                    continue
+                # print("handling neighbour", u, "try shortening", path_to_v + [u])
+                possible_dist, short_path, flipped_edges = self.shorten(path_to_v + [u])
+                self.reconnect_vertices(flipped_edges)
 
                 if self.d[u] > possible_dist:
                     self.d[u] = possible_dist
-                    q.put((self.d[u], u))
+                    self.q.put((self.d[u], u))
 
                     for i in range(len(short_path) - 1):
                         self.parent[short_path[i+1]] = short_path[i]
 
-                    print("shortened the path for", u)
-                else:
-                    print("no change for", u)
+                    # print("shortened the path for", u)
+                # else:
+                    # print("no change for", u)
 
             yield
+
+    def reconnect_vertices(self, flipped_edges):
+        for e in flipped_edges:
+            u, v = e.origin, e.dst
+            if self.parent[u] is not None and self.parent[u] == v:
+                self.reconnect_vertex(u)
+                continue
+            v, u = u, v
+            if self.parent[u] is not None and self.parent[u] == v:
+                self.reconnect_vertex(u)
+
+    def reconnect_vertex(self, u):
+        self.d[u] = np.inf
+        self.parent[u] = None
+        for e in self.tri.in_edges[u]:
+            v = e.origin
+            possible_dist = self.d[v] + e.length
+            if self.d[u] > possible_dist:
+                self.d[u] = possible_dist
+                self.q.put((self.d[u], u))
+                self.parent[u] = v
 
 
 

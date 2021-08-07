@@ -239,6 +239,7 @@ class Scene:
         shortener.set_path(deepcopy(path))
         try:
             shortener.make_geodesic()
+            print("Finished computing single source geodesics successfully. Start rendering")
         except TriangulationException as err:
             self.result_path.set_path(shortener.get_path(), **kwargs)
             self.result_path.set_path(shortener.get_frontier(), **kwargs, color='Black')
@@ -488,18 +489,16 @@ class Scene:
 
 
 if __name__ == '__main__':
-    scene = Scene('C:\\Users\\Arnon\\Desktop\\block.obj')
+    scene = Scene('C:\\Users\\Arnon\\Desktop\\knot1.obj')
 
-    scene.on_pick_by_index(2067)
-    scene.on_pick_by_index(2097)
-    scene.on_pick_by_index(2094)
-    scene.path_picker.on_start_new_path()
-    scene.on_pick_by_index(2097)
+    # scene.on_pick_by_index(2067)
+    # scene.on_pick_by_index(2097)
+    # scene.on_pick_by_index(2094)
+    # scene.path_picker.on_start_new_path()
+    # scene.on_pick_by_index(2097)
 
+    scene.on_pick_by_index(70)
     scene.on_make_geodesic()
-
-    # scene.on_pick_by_index(70)
-    # scene.on_make_geodesic()
 
     # scene.on_pick_by_index(2087)
     # scene.on_pick_by_index(2085)
