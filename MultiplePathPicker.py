@@ -74,23 +74,24 @@ class MultiplePathPicker(MultiplePathVisualizer):
         super().clear()
         self.add_one()
 
+    def set_path(self, paths, **kwargs):
+        super().set_path(paths, **kwargs)
+
+        for viz in self.visualizers:
+            viz.deactivate()
+
     def on_start_new_path(self):
         if self.last.is_empty():
             return
 
-        # change color of last one
-        self.last.kwargs['color'] = prefer.PREVIOUSLY_PICKED_PATH_COLOR
-        self.last.add_actor()
+        self.last.deactivate()
 
         self.add_one()
 
     def on_undo(self):
         if self.last.is_empty():
             self.visualizers.pop()
-
-            # change color of last one
-            self.last.kwargs['color'] = prefer.PICKED_PATH_COLOR
-            self.last.add_actor()
+            self.last.activate()
         else:
             self.last.on_undo()
 

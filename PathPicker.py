@@ -180,11 +180,17 @@ class PathVisualizer:
 
 
 class PathPicker(PathVisualizer):
-    def __init__(self, scene, tolerance=0.025, **kwargs):
-        kwargs.setdefault('color', prefer.PICKED_PATH_COLOR)
+    def __init__(self, scene, tolerance=0.025,
+                 active_color=prefer.PICKED_PATH_COLOR,
+                 unactive_color=prefer.PREVIOUSLY_PICKED_PATH_COLOR,
+                 **kwargs):
         kwargs.setdefault('name', '_picked_path')
 
         super().__init__(scene, **kwargs)
+
+        self.active_color = active_color
+        self.unactive_color = unactive_color
+        self.activate()
 
         self.show_path = prefer.SHOW_PICKED_PATH
         self.show_path_end_points = prefer.SHOW_PICKED_PATH_END_POINTS
@@ -198,8 +204,16 @@ class PathPicker(PathVisualizer):
             show_message=False,
         )
 
+    def activate(self):
+        self.kwargs['color'] = self.active_color
+        self.add_actor()
+
+    def deactivate(self):
+        self.kwargs['color'] = self.unactive_color
+        self.add_actor()
+
     def add_actor(self):
-        if not self.show_path:
+        if not self.show_path or self.is_empty():
             self.remove_actor()
             return
 
